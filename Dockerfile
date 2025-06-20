@@ -1,32 +1,30 @@
-# Usar imagen base con Node.js y Python
-FROM node:18-bullseye-slim
+# Usar imagen base que incluye Node.js y herramientas del sistema
+FROM node:18-bullseye
 
-# Instalar Python y dependencias del sistema
+# Instalar Python 3, pip y curl
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     curl \
-    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Crear directorio de trabajo
+# Crear enlace simbólico para python (por si yt-dlp busca 'python')
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
+# Establecer directorio de trabajo
 WORKDIR /app
 
-# Copiar package.json
+# Copiar package.json y package-lock.json (si existe)
 COPY package*.json ./
 
 # Instalar dependencias de Node.js
-RUN npm install
+RUN npm ci --only=production
 
-# Copiar código fuente
+# Copiar todo el código fuente
 COPY . .
 
-# Crear directorios necesarios
-RUN mkdir -p /tmp/yt-dlp-cache && \
-    mkdir -p /app/downloads
-
-# Exponer puerto
+# Exponer el puerto (Railway asignará automáticamente)
 EXPOSE 3000
 
-# Comando para ejecutar la aplicación
+# Comando para iniciar la aplicación
 CMD ["npm", "start"]
