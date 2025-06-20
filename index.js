@@ -286,7 +286,7 @@ async function processYouTubeVideo(videoUrl, downloadVideo = false) {
                         filename: downloadResult.filename,
                         size: downloadResult.size,
                         url: downloadResult.url,
-                        downloadUrl: `http://82b0e0c0-2deb-4127-bd49-50d989207834-00-128o7f3a6cu5w.worf.replit.dev${downloadResult.url}`
+                        downloadUrl: `http://skyapi-production.up.railway.app${downloadResult.url}`
                     }
                 };
             } else {
@@ -375,7 +375,7 @@ app.get('/api/downloads', (req, res) => {
                 size: stats.size,
                 created: stats.birthtime,
                 url: `/videos/${file}`,
-                downloadUrl: `http://82b0e0c0-2deb-4127-bd49-50d989207834-00-128o7f3a6cu5w.worf.replit.dev/videos/${file}`
+                downloadUrl: `http://skyapi-production.up.railway.app/videos/${file}`
             };
         }).sort((a, b) => new Date(b.created) - new Date(a.created));
 
@@ -447,10 +447,10 @@ app.use((err, req, res, next) => {
 // Inicializar servidor
 app.listen(PORT, () => {
     console.log(`🚀 API YouTube Video Download ejecutándose en puerto ${PORT}`);
-    console.log(`📊 Salud: http://82b0e0c0-2deb-4127-bd49-50d989207834-00-128o7f3a6cu5w.worf.replit.dev/health`);
-    console.log(`📹 Descargar video: http://82b0e0c0-2deb-4127-bd49-50d989207834-00-128o7f3a6cu5w.worf.replit.dev/api/download/video?url=https://youtube.com/watch?v=dQw4w9WgXcQ`);
-    console.log(`📂 Listar descargas: http://82b0e0c0-2deb-4127-bd49-50d989207834-00-128o7f3a6cu5w.worf.replit.dev/api/downloads`);
-    console.log(`🎥 Videos servidos en: http://82b0e0c0-2deb-4127-bd49-50d989207834-00-128o7f3a6cu5w.worf.replit.dev/videos/`);
+    console.log(`📊 Salud: http://skyapi-production.up.railway.app/health`);
+    console.log(`📹 Descargar video: http://skyapi-production.up.railway.app/api/download/video?url=https://youtube.com/watch?v=dQw4w9WgXcQ`);
+    console.log(`📂 Listar descargas: http://skyapi-production.up.railway.app/api/downloads`);
+    console.log(`🎥 Videos servidos en: http://skyapi-production.up.railway.app/videos/`);
 });
 
 export default app;
