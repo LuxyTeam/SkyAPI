@@ -1,11 +1,12 @@
 # Usar imagen base que incluye Node.js y herramientas del sistema
 FROM node:18-bullseye
 
-# Instalar Python 3, pip y curl
+# Instalar Python 3, pip, curl y ffmpeg
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     curl \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Crear enlace simbólico para python (por si yt-dlp busca 'python')
