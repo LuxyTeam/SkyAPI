@@ -6,7 +6,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import os from 'os';
-import axios from 'axios';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -19,10 +18,6 @@ app.use(express.urlencoded({ extended: true }));
 // Usar directorios temporales del sistema
 const tmpDir = os.tmpdir();
 const ytDlpPath = path.join(tmpDir, 'yt-dlp');
-
-// ===============================================
-// FUNCIONES PARA YOUTUBE (SIN MODIFICAR)
-// ===============================================
 
 // Función para descargar yt-dlp si no existe
 async function ensureYtDlp() {
@@ -150,7 +145,7 @@ async function getDownloadUrl(videoUrl, cookiesPath, format = 'best[ext=mp4]/bes
     });
 }
 
-// Función principal para YouTube
+// Función principal
 async function processYouTubeVideo(videoUrl, getDirectUrl = false, format = 'best[ext=mp4]/best') {
     try {
         await ensureYtDlp();
@@ -185,102 +180,17 @@ async function processYouTubeVideo(videoUrl, getDirectUrl = false, format = 'bes
     }
 }
 
-// ===============================================
-// FUNCIONES PARA SPOTIFY
-// ===============================================
+// RUTAS DE LA API
 
-// Función para formatear duración
-function formatDuration(duration_ms) {
-    const seconds = Math.floor(duration_ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
-// Función para obtener estado de conversión
-async function pollConversionStatus(tid, maxTries = 60) {
-    let tries = 0;
-    while (tries < maxTries) {
-        try {
-            const res = await axios.get(`https://api.fabdl.com/spotify/mp3-convert-progress/${tid}`, {
-                timeout: 10000
-            });
-            const { status, download_url } = res.data.result;
-            if (status === 3 && download_url) {
-                return `https://api.fabdl.com${download_url}`;
-            }
-            if (status === -1) throw new Error("Conversion failed.");
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            tries++;
-        } catch (err) {
-            if (err.message === "Conversion failed.") throw err;
-            tries++;
-            if (tries >= maxTries) throw new Error("Conversion timeout reached.");
-            await new Promise(resolve => setTimeout(resolve, 3000));
-        }
-    }
-    return null;
-}
-
-// Función principal para Spotify
-async function fetchSpotifyDownload(url) {
-    try {
-        const metaRes = await axios.get("https://api.fabdl.com/spotify/get", {
-            params: { url },
-            timeout: 30000
-        });
-        if (!metaRes.data.result) {
-            return { success: false, error: "Failed to fetch track info." };
-        }
-        const { id, gid, name, artists, image, duration_ms, album } = metaRes.data.result;
-        const trackData = {
-            title: name,
-            artist: artists,
-            album: album || "Unknown Album",
-            duration: formatDuration(duration_ms),
-            image
-        };
-        const taskRes = await axios.get(`https://api.fabdl.com/spotify/mp3-convert-task/${gid}/${id}`, {
-            timeout: 30000
-        });
-        if (!taskRes.data.result?.tid) {
-            return { success: false, error: "Failed to create conversion task." };
-        }
-        const { tid } = taskRes.data.result;
-        const downloadUrl = await pollConversionStatus(tid);
-        if (!downloadUrl) {
-            return { success: false, error: "Conversion failed or timed out." };
-        }
-        return {
-            success: true,
-            downloadUrl,
-            ...trackData
-        };
-    } catch (err) {
-        console.error("fetchSpotifyDownload error:", err);
-        if (err.code === 'ECONNABORTED') {
-            return { success: false, error: "Request timed out. Try again." };
-        }
-        return {
-            success: false,
-            error: err.response?.data?.message || "Server error during Spotify download."
-        };
-    }
-}
-
-// ===============================================
-// RUTAS PARA YOUTUBE
-// ===============================================
-
-// Ruta para obtener solo metadata de YouTube
-app.get('/api/youtube/info', async (req, res) => {
+// Ruta para obtener solo metadata
+app.get('/api/info', async (req, res) => {
     try {
         const { url } = req.query;
 
         if (!url) {
             return res.status(400).json({
                 error: 'URL del video es requerida',
-                usage: '/api/youtube/info?url=https://youtube.com/watch?v=...'
+                usage: '/api/info?url=https://youtube.com/watch?v=...'
             });
         }
 
@@ -298,15 +208,15 @@ app.get('/api/youtube/info', async (req, res) => {
     }
 });
 
-// Ruta para obtener URL de descarga directa de YouTube
-app.get('/api/youtube/download-url', async (req, res) => {
+// Ruta para obtener URL de descarga directa
+app.get('/api/download-url', async (req, res) => {
     try {
         const { url, format = 'best[ext=mp4]/best' } = req.query;
 
         if (!url) {
             return res.status(400).json({
                 error: 'URL del video es requerida',
-                usage: '/api/youtube/download-url?url=https://youtube.com/watch?v=...'
+                usage: '/api/download-url?url=https://youtube.com/watch?v=...'
             });
         }
 
@@ -326,15 +236,15 @@ app.get('/api/youtube/download-url', async (req, res) => {
     }
 });
 
-// Ruta para obtener formatos disponibles de YouTube
-app.get('/api/youtube/formats', async (req, res) => {
+// Ruta para obtener formatos disponibles
+app.get('/api/formats', async (req, res) => {
     try {
         const { url } = req.query;
 
         if (!url) {
             return res.status(400).json({
                 error: 'URL del video es requerida',
-                usage: '/api/youtube/formats?url=https://youtube.com/watch?v=...'
+                usage: '/api/formats?url=https://youtube.com/watch?v=...'
             });
         }
 
@@ -363,120 +273,26 @@ app.get('/api/youtube/formats', async (req, res) => {
     }
 });
 
-// ===============================================
-// RUTAS PARA SPOTIFY
-// ===============================================
-
-// Ruta para obtener información de Spotify
-app.get('/api/spotify/info', async (req, res) => {
-    try {
-        const { url } = req.query;
-
-        if (!url) {
-            return res.status(400).json({
-                error: 'URL de Spotify es requerida',
-                usage: '/api/spotify/info?url=https://open.spotify.com/track/...'
-            });
-        }
-
-        // Solo obtenemos metadata sin generar URL de descarga
-        const metaRes = await axios.get("https://api.fabdl.com/spotify/get", {
-            params: { url },
-            timeout: 30000
-        });
-
-        if (!metaRes.data.result) {
-            return res.status(500).json({
-                success: false,
-                error: "Failed to fetch track info."
-            });
-        }
-
-        const { name, artists, image, duration_ms, album } = metaRes.data.result;
-
-        res.json({
-            success: true,
-            data: {
-                title: name,
-                artist: artists,
-                album: album || "Unknown Album",
-                duration: formatDuration(duration_ms),
-                image,
-                url: url
-            }
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// Ruta para descargar de Spotify
-app.get('/api/spotify/download-url', async (req, res) => {
-    try {
-        const { url } = req.query;
-
-        if (!url) {
-            return res.status(400).json({
-                error: 'URL de Spotify es requerida',
-                usage: '/api/spotify/download-url?url=https://open.spotify.com/track/...'
-            });
-        }
-
-        const result = await fetchSpotifyDownload(url);
-
-        if (!result.success) {
-            return res.status(500).json(result);
-        }
-
-        res.json({
-            success: true,
-            data: result,
-            message: 'Usa la URL downloadUrl para descargar la canción directamente'
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// ===============================================
-// RUTAS GENERALES
-// ===============================================
-
 // Ruta de salud
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
-        message: 'YouTube & Spotify Download API funcionando',
+        message: 'YouTube Video Download API funcionando en Vercel',
         endpoints: {
-            youtube: {
-                info: '/api/youtube/info?url=VIDEO_URL',
-                downloadUrl: '/api/youtube/download-url?url=VIDEO_URL&format=FORMAT',
-                formats: '/api/youtube/formats?url=VIDEO_URL'
-            },
-            spotify: {
-                info: '/api/spotify/info?url=SPOTIFY_URL',
-                downloadUrl: '/api/spotify/download-url?url=SPOTIFY_URL'
-            }
+            info: '/api/info?url=VIDEO_URL',
+            downloadUrl: '/api/download-url?url=VIDEO_URL&format=FORMAT',
+            formats: '/api/formats?url=VIDEO_URL'
         },
-        note: 'Esta API proporciona URLs de descarga directa, no almacena archivos en el servidor'
+        note: 'Esta API proporciona URLs de descarga directa, no almacena videos en el servidor'
     });
 });
 
 // Ruta raíz
 app.get('/', (req, res) => {
     res.json({
-        message: 'YouTube & Spotify Download API',
+        message: 'YouTube Download API',
         status: 'running',
-        documentation: '/health',
-        services: ['YouTube', 'Spotify']
+        documentation: '/health'
     });
 });
 
@@ -494,8 +310,6 @@ if (process.env.NODE_ENV !== 'production') {
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
         console.log(`🚀 API ejecutándose en puerto ${PORT}`);
-        console.log(`📺 YouTube endpoints: /api/youtube/*`);
-        console.log(`🎵 Spotify endpoints: /api/spotify/*`);
     });
 }
 
