@@ -392,7 +392,7 @@ async function processYouTubeVideo(videoUrl, downloadVideo = false, downloadAudi
                     filename: downloadResult.filename,
                     size: downloadResult.size,
                     url: downloadResult.url,
-                    downloadUrl: `http://skyapi-production-e3e0.up.railway.app${downloadResult.url}`
+                    downloadUrl: `https://skyapi-production-e3e0.up.railway.app${downloadResult.url}`
                 };
             }
 
@@ -581,7 +581,7 @@ app.get('/api/downloads', (req, res) => {
                 size: stats.size,
                 created: stats.birthtime,
                 url: `/videos/${file}`,
-                downloadUrl: `http://skyapi-production-e3e0.up.railway.app/videos/${file}`
+                downloadUrl: `https://skyapi-production-e3e0.up.railway.app/videos/${file}`
             };
         }).sort((a, b) => new Date(b.created) - new Date(a.created));
 
@@ -614,7 +614,7 @@ app.get('/api/audio', (req, res) => {
                 created: stats.birthtime,
                 format: path.extname(file).substring(1),
                 url: `/audio/${file}`,
-                downloadUrl: `http://skyapi-production-e3e0.up.railway.app/audio/${file}`
+                downloadUrl: `https://skyapi-production-e3e0.up.railway.app/audio/${file}`
             };
         }).sort((a, b) => new Date(b.created) - new Date(a.created));
 
