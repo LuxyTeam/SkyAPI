@@ -10,6 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const binDir = path.join(__dirname, 'bin');
 const tmpDir = path.join(__dirname, 'tmp');
 const downloadsDir = path.join(__dirname, 'downloads'); // Nueva carpeta para videos descargados
+const audioDir = path.join(__dirname, 'audio'); // Nueva carpeta para audios convertidos
 const ytDlpPath = path.join(binDir, 'yt-dlp');
 
 const app = express();
@@ -20,12 +21,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Servir archivos estáticos desde la carpeta downloads
+// Servir archivos estáticos desde la carpeta downloads y audio
 app.use('/videos', express.static(downloadsDir));
+app.use('/audio', express.static(audioDir));
 
 // Crear directorios necesarios
 function ensureDirectories() {
-    [binDir, tmpDir, downloadsDir].forEach(dir => {
+    [binDir, tmpDir, downloadsDir, audioDir].forEach(dir => {
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
             console.log(`Directorio creado: ${dir}`);
@@ -210,6 +212,110 @@ async function downloadVideoToLocal(videoUrl, cookiesPath, videoInfo) {
     });
 }
 
+// Nueva función para descargar directamente como audio
+async function downloadAudioToLocal(videoUrl, cookiesPath, videoInfo, format = 'mp3', quality = '192') {
+    return new Promise((resolve, reject) => {
+        const safeTitle = sanitizeFilename(videoInfo.title);
+        const filename = `${safeTitle}_${videoInfo.id || Date.now()}.${format}`;
+        const outputPath = path.join(audioDir, filename);
+
+        // Comando para descargar directamente como audio con yt-dlp y ffmpeg
+        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --extract-audio --audio-format ${format} --audio-quality ${quality} --output "${outputPath}" "${videoUrl}"`;
+
+        console.log(`Iniciando descarga de audio: ${videoInfo.title}`);
+
+        exec(command, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
+            if (error) {
+                reject(new Error(`Error descargando audio: ${error.message}`));
+                return;
+            }
+
+            if (stderr) {
+                console.warn('yt-dlp stderr durante descarga de audio:', stderr);
+            }
+
+            // Verificar que el archivo fue creado
+            try {
+                if (!fs.existsSync(outputPath)) {
+                    reject(new Error('No se pudo encontrar el archivo de audio descargado'));
+                    return;
+                }
+
+                const stats = fs.statSync(outputPath);
+                console.log(`Audio descargado exitosamente: ${filename}`);
+
+                resolve({
+                    filename: filename,
+                    path: outputPath,
+                    size: stats.size,
+                    format: format,
+                    quality: quality,
+                    url: `/audio/${filename}`
+                });
+            } catch (e) {
+                reject(new Error(`Error verificando descarga de audio: ${e.message}`));
+            }
+        });
+    });
+}
+
+// Función para convertir video existente a audio con ffmpeg
+async function convertVideoToAudio(videoPath, format = 'mp3', quality = '192') {
+    return new Promise((resolve, reject) => {
+        const videoName = path.basename(videoPath, path.extname(videoPath));
+        const audioFilename = `${videoName}.${format}`;
+        const audioPath = path.join(audioDir, audioFilename);
+
+        // Configurar calidad según el formato
+        let qualityParam;
+        if (format === 'mp3') {
+            qualityParam = `-b:a ${quality}k`;
+        } else if (format === 'aac') {
+            qualityParam = `-b:a ${quality}k`;
+        } else if (format === 'ogg') {
+            qualityParam = `-q:a ${Math.ceil(parseInt(quality) / 32)}`;
+        } else {
+            qualityParam = `-b:a ${quality}k`;
+        }
+
+        const command = `ffmpeg -i "${videoPath}" -vn -acodec ${format === 'mp3' ? 'libmp3lame' : format === 'aac' ? 'aac' : 'libvorbis'} ${qualityParam} "${audioPath}" -y`;
+
+        console.log(`Convirtiendo video a audio: ${audioFilename}`);
+
+        exec(command, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
+            if (error) {
+                reject(new Error(`Error convirtiendo a audio: ${error.message}`));
+                return;
+            }
+
+            if (stderr) {
+                console.warn('ffmpeg stderr:', stderr);
+            }
+
+            try {
+                if (!fs.existsSync(audioPath)) {
+                    reject(new Error('No se pudo crear el archivo de audio'));
+                    return;
+                }
+
+                const stats = fs.statSync(audioPath);
+                console.log(`Audio convertido exitosamente: ${audioFilename}`);
+
+                resolve({
+                    filename: audioFilename,
+                    path: audioPath,
+                    size: stats.size,
+                    format: format,
+                    quality: quality,
+                    url: `/audio/${audioFilename}`
+                });
+            } catch (e) {
+                reject(new Error(`Error verificando conversión: ${e.message}`));
+            }
+        });
+    });
+}
+
 function cleanup() {
     try {
         // Limpiar cookies temporales
@@ -228,20 +334,22 @@ function cleanup() {
             }
         });
 
-        // Opcional: Limpiar videos antiguos (descomenta si quieres auto-limpieza)
+        // Opcional: Limpiar archivos antiguos
         /*
-        const videoFiles = fs.readdirSync(downloadsDir);
-        videoFiles.forEach(file => {
-            const filePath = path.join(downloadsDir, file);
-            const stats = fs.statSync(filePath);
-            const now = Date.now();
-            const fileAge = now - stats.mtime.getTime();
+        [downloadsDir, audioDir].forEach(dir => {
+            const files = fs.readdirSync(dir);
+            files.forEach(file => {
+                const filePath = path.join(dir, file);
+                const stats = fs.statSync(filePath);
+                const now = Date.now();
+                const fileAge = now - stats.mtime.getTime();
 
-            // Eliminar videos más antiguos que 24 horas
-            if (fileAge > 86400000) {
-                fs.unlinkSync(filePath);
-                console.log('Video antiguo eliminado:', file);
-            }
+                // Eliminar archivos más antiguos que 24 horas
+                if (fileAge > 86400000) {
+                    fs.unlinkSync(filePath);
+                    console.log('Archivo antiguo eliminado:', file);
+                }
+            });
         });
         */
     } catch (error) {
@@ -250,7 +358,7 @@ function cleanup() {
 }
 
 // Función principal
-async function processYouTubeVideo(videoUrl, downloadVideo = false) {
+async function processYouTubeVideo(videoUrl, downloadVideo = false, downloadAudio = false, audioFormat = 'mp3', audioQuality = '192') {
     try {
         ensureDirectories();
         cleanup();
@@ -275,23 +383,33 @@ async function processYouTubeVideo(videoUrl, downloadVideo = false) {
         try {
             // Obtener información del video
             const videoInfo = await getVideoInfo(videoUrl, cookiesPath);
+            let result = { ...videoInfo };
 
             if (downloadVideo) {
                 // Descargar video localmente
                 const downloadResult = await downloadVideoToLocal(videoUrl, cookiesPath, videoInfo);
-
-                return {
-                    ...videoInfo,
-                    download: {
-                        filename: downloadResult.filename,
-                        size: downloadResult.size,
-                        url: downloadResult.url,
-                        downloadUrl: `http://skyapi-production-e3e0.up.railway.app${downloadResult.url}`
-                    }
+                result.download = {
+                    filename: downloadResult.filename,
+                    size: downloadResult.size,
+                    url: downloadResult.url,
+                    downloadUrl: `http://skyapi-production-e3e0.up.railway.app${downloadResult.url}`
                 };
-            } else {
-                return videoInfo;
             }
+
+            if (downloadAudio) {
+                // Descargar directamente como audio
+                const audioResult = await downloadAudioToLocal(videoUrl, cookiesPath, videoInfo, audioFormat, audioQuality);
+                result.audio = {
+                    filename: audioResult.filename,
+                    size: audioResult.size,
+                    format: audioResult.format,
+                    quality: audioResult.quality,
+                    url: audioResult.url,
+                    downloadUrl: `http://skyapi-production-e3e0.up.railway.app${audioResult.url}`
+                };
+            }
+
+            return result;
         } finally {
             try {
                 if (fs.existsSync(cookiesPath)) {
@@ -321,7 +439,7 @@ app.get('/api/info', async (req, res) => {
             });
         }
 
-        const result = await processYouTubeVideo(url, false);
+        const result = await processYouTubeVideo(url, false, false);
 
         res.json({
             success: true,
@@ -347,11 +465,99 @@ app.get('/api/download/video', async (req, res) => {
             });
         }
 
-        const result = await processYouTubeVideo(url, true);
+        const result = await processYouTubeVideo(url, true, false);
 
         res.json({
             success: true,
             data: result
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Nueva ruta para descargar directamente como audio
+app.get('/api/download/audio', async (req, res) => {
+    try {
+        const { url, format = 'mp3', quality = '192' } = req.query;
+
+        if (!url) {
+            return res.status(400).json({
+                error: 'URL del video es requerida',
+                usage: '/api/download/audio?url=https://youtube.com/watch?v=...&format=mp3&quality=192'
+            });
+        }
+
+        // Validar formato
+        const validFormats = ['mp3', 'aac', 'ogg', 'wav'];
+        if (!validFormats.includes(format)) {
+            return res.status(400).json({
+                error: `Formato no válido. Formatos soportados: ${validFormats.join(', ')}`
+            });
+        }
+
+        const result = await processYouTubeVideo(url, false, true, format, quality);
+
+        res.json({
+            success: true,
+            data: result
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Nueva ruta para convertir video existente a audio
+app.post('/api/convert/audio', async (req, res) => {
+    try {
+        const { filename, format = 'mp3', quality = '192' } = req.body;
+
+        if (!filename) {
+            return res.status(400).json({
+                error: 'Nombre del archivo de video es requerido',
+                usage: 'POST /api/convert/audio con body: {"filename": "video.mp4", "format": "mp3", "quality": "192"}'
+            });
+        }
+
+        const videoPath = path.join(downloadsDir, filename);
+
+        if (!fs.existsSync(videoPath)) {
+            return res.status(404).json({
+                error: 'Archivo de video no encontrado'
+            });
+        }
+
+        // Validar formato
+        const validFormats = ['mp3', 'aac', 'ogg', 'wav'];
+        if (!validFormats.includes(format)) {
+            return res.status(400).json({
+                error: `Formato no válido. Formatos soportados: ${validFormats.join(', ')}`
+            });
+        }
+
+        const audioResult = await convertVideoToAudio(videoPath, format, quality);
+
+        res.json({
+            success: true,
+            data: {
+                originalVideo: filename,
+                audio: {
+                    filename: audioResult.filename,
+                    size: audioResult.size,
+                    format: audioResult.format,
+                    quality: audioResult.quality,
+                    url: audioResult.url,
+                    downloadUrl: `http://skyapi-production-e3e0.up.railway.app${audioResult.url}`
+                }
+            }
         });
 
     } catch (error) {
@@ -394,6 +600,39 @@ app.get('/api/downloads', (req, res) => {
     }
 });
 
+// Nueva ruta para listar audios convertidos
+app.get('/api/audio', (req, res) => {
+    try {
+        const files = fs.readdirSync(audioDir);
+        const audioFiles = files.map(file => {
+            const filePath = path.join(audioDir, file);
+            const stats = fs.statSync(filePath);
+
+            return {
+                filename: file,
+                size: stats.size,
+                created: stats.birthtime,
+                format: path.extname(file).substring(1),
+                url: `/audio/${file}`,
+                downloadUrl: `http://skyapi-production-e3e0.up.railway.app/audio/${file}`
+            };
+        }).sort((a, b) => new Date(b.created) - new Date(a.created));
+
+        res.json({
+            success: true,
+            data: {
+                count: audioFiles.length,
+                audios: audioFiles
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // Ruta para eliminar un video específico
 app.delete('/api/downloads/:filename', (req, res) => {
     try {
@@ -421,6 +660,33 @@ app.delete('/api/downloads/:filename', (req, res) => {
     }
 });
 
+// Nueva ruta para eliminar un audio específico
+app.delete('/api/audio/:filename', (req, res) => {
+    try {
+        const { filename } = req.params;
+        const filePath = path.join(audioDir, filename);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({
+                success: false,
+                error: 'Archivo de audio no encontrado'
+            });
+        }
+
+        fs.unlinkSync(filePath);
+
+        res.json({
+            success: true,
+            message: `Archivo de audio ${filename} eliminado correctamente`
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // Ruta de salud
 app.get('/health', (req, res) => {
     res.json({
@@ -428,9 +694,20 @@ app.get('/health', (req, res) => {
         message: 'YouTube Video Download API funcionando',
         endpoints: {
             info: '/api/info?url=VIDEO_URL',
-            download: '/api/download/video?url=VIDEO_URL',
-            list: '/api/downloads',
-            delete: '/api/downloads/FILENAME (DELETE method)'
+            downloadVideo: '/api/download/video?url=VIDEO_URL',
+            downloadAudio: '/api/download/audio?url=VIDEO_URL&format=mp3&quality=192',
+            convertAudio: '/api/convert/audio (POST) - Convert existing video to audio',
+            listVideos: '/api/downloads',
+            listAudios: '/api/audio',
+            deleteVideo: '/api/downloads/FILENAME (DELETE method)',
+            deleteAudio: '/api/audio/FILENAME (DELETE method)'
+        },
+        supportedAudioFormats: ['mp3', 'aac', 'ogg', 'wav'],
+        audioQualities: {
+            mp3: '64k, 128k, 192k, 256k, 320k',
+            aac: '64k, 128k, 192k, 256k',
+            ogg: 'Quality levels 0-10 (converted from bitrate)',
+            wav: 'Lossless'
         }
     });
 });
@@ -449,8 +726,12 @@ app.listen(PORT, () => {
     console.log(`🚀 API YouTube Video Download ejecutándose en puerto ${PORT}`);
     console.log(`📊 Salud: http://skyapi-production-e3e0.up.railway.app/health`);
     console.log(`📹 Descargar video: http://skyapi-production-e3e0.up.railway.app/api/download/video?url=https://youtube.com/watch?v=dQw4w9WgXcQ`);
-    console.log(`📂 Listar descargas: http://skyapi-production-e3e0.up.railway.app/api/downloads`);
+    console.log(`🎵 Descargar audio: http://skyapi-production-e3e0.up.railway.app/api/download/audio?url=https://youtube.com/watch?v=dQw4w9WgXcQ&format=mp3&quality=192`);
+    console.log(`🔄 Convertir a audio: POST http://skyapi-production-e3e0.up.railway.app/api/convert/audio`);
+    console.log(`📂 Listar videos: http://skyapi-production-e3e0.up.railway.app/api/downloads`);
+    console.log(`🎶 Listar audios: http://skyapi-production-e3e0.up.railway.app/api/audio`);
     console.log(`🎥 Videos servidos en: http://skyapi-production-e3e0.up.railway.app/videos/`);
+    console.log(`🔊 Audios servidos en: http://skyapi-production-e3e0.up.railway.app/audio/`);
 });
 
 export default app;
