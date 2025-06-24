@@ -47,9 +47,10 @@ async function ensureYtDlp() {
     });
 }
 
-function generateCookiesFile() {
+// Función para generar cookies de YouTube
+function generateYouTubeCookiesFile() {
     const now = Date.now();
-    const cookiesPath = path.join(tmpDir, `${now}_cookies.txt`);
+    const cookiesPath = path.join(tmpDir, `${now}_youtube_cookies.txt`);
 
     const netscapeCookies = [
         '# Netscape HTTP Cookie File',
@@ -72,136 +73,39 @@ function generateCookiesFile() {
         fs.writeFileSync(cookiesPath, netscapeCookies.join('\n'));
         return cookiesPath;
     } catch (error) {
-        throw new Error(`Error al crear archivo de cookies: ${error.message}`);
+        throw new Error(`Error al crear archivo de cookies de YouTube: ${error.message}`);
     }
 }
 
-// Función para extraer información de Spotify usando scraping web
-async function getSpotifyTrackInfo(spotifyUrl) {
-    return new Promise((resolve, reject) => {
-        // Extraer el ID de la canción de la URL de Spotify
-        const trackIdMatch = spotifyUrl.match(/track\/([a-zA-Z0-9]+)/);
-        if (!trackIdMatch) {
-            reject(new Error('URL de Spotify inválida'));
-            return;
-        }
+// Función para generar cookies de Spotify (básicas)
+function generateSpotifyCookiesFile() {
+    const now = Date.now();
+    const cookiesPath = path.join(tmpDir, `${now}_spotify_cookies.txt`);
 
-        const trackId = trackIdMatch[1];
-        const embedUrl = `https://open.spotify.com/embed/track/${trackId}`;
+    const netscapeCookies = [
+        '# Netscape HTTP Cookie File',
+        '# http://curl.haxx.se/rfc/cookie_spec.html',
+        '# This is a generated file! Do not edit.',
+        '.spotify.com\tTRUE\t/\tFALSE\t0\tsp_t\ttemp_token_placeholder',
+        '.open.spotify.com\tTRUE\t/\tFALSE\t0\tsp_dc\ttemp_dc_placeholder'
+    ];
 
-        // Usar curl para obtener información básica del embed
-        const command = `curl -s -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "${embedUrl}"`;
-
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                reject(new Error(`Error obteniendo información de Spotify: ${error.message}`));
-                return;
-            }
-
-            try {
-                // Buscar información en el HTML del embed
-                const titleMatch = stdout.match(/<title[^>]*>([^<]+)<\/title>/i);
-                const ogTitleMatch = stdout.match(/property="og:title"[^>]*content="([^"]+)"/i);
-                const ogDescriptionMatch = stdout.match(/property="og:description"[^>]*content="([^"]+)"/i);
-
-                let title = 'Canción desconocida';
-                let artist = 'Artista desconocido';
-
-                if (ogTitleMatch) {
-                    title = ogTitleMatch[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"');
-                } else if (titleMatch) {
-                    title = titleMatch[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"');
-                }
-
-                if (ogDescriptionMatch) {
-                    const description = ogDescriptionMatch[1];
-                    const artistMatch = description.match(/Song\s*·\s*([^·]+)/i) || description.match(/([^·]+)\s*·/);
-                    if (artistMatch) {
-                        artist = artistMatch[1].trim();
-                    }
-                }
-
-                // Si no encontramos el artista en la descripción, intentar extraerlo del título
-                if (artist === 'Artista desconocido' && title.includes('·')) {
-                    const parts = title.split('·');
-                    if (parts.length >= 2) {
-                        artist = parts[0].trim();
-                        title = parts[1].trim();
-                    }
-                }
-
-                resolve({
-                    title: title,
-                    artist: artist,
-                    spotifyUrl: spotifyUrl,
-                    trackId: trackId
-                });
-
-            } catch (parseError) {
-                reject(new Error(`Error analizando información de Spotify: ${parseError.message}`));
-            }
-        });
-    });
+    try {
+        fs.writeFileSync(cookiesPath, netscapeCookies.join('\n'));
+        return cookiesPath;
+    } catch (error) {
+        throw new Error(`Error al crear archivo de cookies de Spotify: ${error.message}`);
+    }
 }
 
-// Función para buscar en YouTube usando yt-dlp
-async function searchYouTube(query, cookiesPath) {
-    return new Promise((resolve, reject) => {
-        const searchQuery = `ytsearch5:"${query}"`;
-        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --dump-json "${searchQuery}"`;
-
-        exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-            if (error) {
-                reject(new Error(`Error buscando en YouTube: ${error.message}`));
-                return;
-            }
-
-            if (stderr) {
-                console.warn('yt-dlp stderr:', stderr);
-            }
-
-            try {
-                const lines = stdout.trim().split('\n').filter(line => line.trim());
-                const results = lines.map(line => {
-                    try {
-                        return JSON.parse(line);
-                    } catch (e) {
-                        return null;
-                    }
-                }).filter(result => result !== null);
-
-                if (results.length === 0) {
-                    reject(new Error('No se encontraron resultados en YouTube'));
-                    return;
-                }
-
-                // Formatear resultados
-                const formattedResults = results.map(video => ({
-                    id: video.id,
-                    title: video.title,
-                    uploader: video.uploader,
-                    duration: video.duration,
-                    url: video.webpage_url,
-                    thumbnail: video.thumbnail
-                }));
-
-                resolve(formattedResults);
-
-            } catch (parseError) {
-                reject(new Error(`Error analizando resultados de búsqueda: ${parseError.message}`));
-            }
-        });
-    });
-}
-
-// Función para obtener información del video (solo metadata)
-async function getVideoInfo(videoUrl, cookiesPath) {
+// Función para obtener información de video de YouTube
+async function getYouTubeVideoInfo(videoUrl, cookiesPath) {
     return new Promise((resolve, reject) => {
         const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --dump-json "${videoUrl}"`;
 
         exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
             if (error) {
-                reject(new Error(`Error obteniendo información del video: ${error.message}`));
+                reject(new Error(`Error obteniendo información del video de YouTube: ${error.message}`));
                 return;
             }
 
@@ -212,6 +116,7 @@ async function getVideoInfo(videoUrl, cookiesPath) {
             try {
                 const videoInfo = JSON.parse(stdout);
                 resolve({
+                    platform: 'youtube',
                     title: videoInfo.title || 'Sin título',
                     duration: videoInfo.duration || 0,
                     resolution: videoInfo.resolution || (videoInfo.height ? `${videoInfo.height}p` : 'N/A'),
@@ -231,20 +136,63 @@ async function getVideoInfo(videoUrl, cookiesPath) {
                     })).slice(0, 10) : []
                 });
             } catch (e) {
-                reject(new Error(`Error analizando datos del video: ${e.message}`));
+                reject(new Error(`Error analizando datos del video de YouTube: ${e.message}`));
             }
         });
     });
 }
 
-// Función para obtener URL de descarga directa (sin descargar al servidor)
-async function getDownloadUrl(videoUrl, cookiesPath, format = 'bestaudio[ext=m4a]/bestaudio') {
+// Función para obtener información de track de Spotify
+async function getSpotifyTrackInfo(trackUrl, cookiesPath) {
+    return new Promise((resolve, reject) => {
+        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --cookies "${cookiesPath}" --dump-json "${trackUrl}"`;
+
+        exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+            if (error) {
+                reject(new Error(`Error obteniendo información del track de Spotify: ${error.message}`));
+                return;
+            }
+
+            if (stderr) {
+                console.warn('yt-dlp stderr:', stderr);
+            }
+
+            try {
+                const trackInfo = JSON.parse(stdout);
+                resolve({
+                    platform: 'spotify',
+                    title: trackInfo.title || 'Sin título',
+                    artist: trackInfo.artist || trackInfo.uploader || 'Artista desconocido',
+                    album: trackInfo.album || null,
+                    duration: trackInfo.duration || 0,
+                    thumbnail: trackInfo.thumbnail || null,
+                    releaseDate: trackInfo.release_date || trackInfo.upload_date || null,
+                    trackNumber: trackInfo.track_number || null,
+                    id: trackInfo.id || null,
+                    url: trackInfo.webpage_url || trackUrl,
+                    formats: trackInfo.formats ? trackInfo.formats.map(f => ({
+                        format_id: f.format_id,
+                        ext: f.ext,
+                        quality: f.quality,
+                        filesize: f.filesize,
+                        url: f.url
+                    })).slice(0, 10) : []
+                });
+            } catch (e) {
+                reject(new Error(`Error analizando datos del track de Spotify: ${e.message}`));
+            }
+        });
+    });
+}
+
+// Función para obtener URL de descarga de YouTube
+async function getYouTubeDownloadUrl(videoUrl, cookiesPath, format = 'best[ext=mp4]/best') {
     return new Promise((resolve, reject) => {
         const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --format "${format}" --get-url "${videoUrl}"`;
 
         exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
             if (error) {
-                reject(new Error(`Error obteniendo URL de descarga: ${error.message}`));
+                reject(new Error(`Error obteniendo URL de descarga de YouTube: ${error.message}`));
                 return;
             }
 
@@ -254,7 +202,7 @@ async function getDownloadUrl(videoUrl, cookiesPath, format = 'bestaudio[ext=m4a
 
             const downloadUrl = stdout.trim();
             if (!downloadUrl || !downloadUrl.startsWith('http')) {
-                reject(new Error('No se pudo obtener URL de descarga válida'));
+                reject(new Error('No se pudo obtener URL de descarga válida de YouTube'));
                 return;
             }
 
@@ -263,226 +211,69 @@ async function getDownloadUrl(videoUrl, cookiesPath, format = 'bestaudio[ext=m4a
     });
 }
 
-// Función principal para procesar video de YouTube
-async function processYouTubeVideo(videoUrl, getDirectUrl = false, format = 'best[ext=mp4]/best') {
+// Función para obtener URL de descarga de Spotify
+async function getSpotifyDownloadUrl(trackUrl, cookiesPath, format = 'bestaudio[ext=m4a]/bestaudio') {
+    return new Promise((resolve, reject) => {
+        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --cookies "${cookiesPath}" --format "${format}" --get-url "${trackUrl}"`;
+
+        exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+            if (error) {
+                reject(new Error(`Error obteniendo URL de descarga de Spotify: ${error.message}`));
+                return;
+            }
+
+            if (stderr) {
+                console.warn('yt-dlp stderr:', stderr);
+            }
+
+            const downloadUrl = stdout.trim();
+            if (!downloadUrl || !downloadUrl.startsWith('http')) {
+                reject(new Error('No se pudo obtener URL de descarga válida de Spotify'));
+                return;
+            }
+
+            resolve(downloadUrl);
+        });
+    });
+}
+
+// Función para limpiar cookies
+function cleanupCookies(cookiesPath) {
     try {
-        await ensureYtDlp();
-        
-        const cookiesPath = generateCookiesFile();
-
-        try {
-            const videoInfo = await getVideoInfo(videoUrl, cookiesPath);
-
-            if (getDirectUrl) {
-                const downloadUrl = await getDownloadUrl(videoUrl, cookiesPath, format);
-                return {
-                    ...videoInfo,
-                    downloadUrl: downloadUrl,
-                    format: format
-                };
-            }
-
-            return videoInfo;
-        } finally {
-            try {
-                if (fs.existsSync(cookiesPath)) {
-                    fs.unlinkSync(cookiesPath);
-                }
-            } catch (cleanupError) {
-                console.warn('No se pudo eliminar cookies:', cleanupError.message);
-            }
+        if (fs.existsSync(cookiesPath)) {
+            fs.unlinkSync(cookiesPath);
         }
-    } catch (error) {
-        console.error('Error en processYouTubeVideo:', error.message);
-        throw error;
+    } catch (cleanupError) {
+        console.warn('No se pudo eliminar cookies:', cleanupError.message);
     }
 }
 
-// Función principal para procesar canción de Spotify
-async function processSpotifyTrack(spotifyUrl, getDirectUrl = false, format = 'bestaudio[ext=m4a]/bestaudio') {
-    try {
-        await ensureYtDlp();
-        
-        const cookiesPath = generateCookiesFile();
+// RUTAS DE YOUTUBE
 
-        try {
-            // Obtener información de Spotify
-            const spotifyInfo = await getSpotifyTrackInfo(spotifyUrl);
-            
-            // Buscar en YouTube
-            const searchQuery = `${spotifyInfo.artist} ${spotifyInfo.title}`;
-            const youtubeResults = await searchYouTube(searchQuery, cookiesPath);
-            
-            if (youtubeResults.length === 0) {
-                throw new Error('No se encontraron resultados en YouTube para esta canción');
-            }
-
-            // Usar el primer resultado (más relevante)
-            const bestMatch = youtubeResults[0];
-            const videoInfo = await getVideoInfo(bestMatch.url, cookiesPath);
-
-            const result = {
-                spotify: spotifyInfo,
-                youtube: videoInfo,
-                searchResults: youtubeResults,
-                selectedVideo: bestMatch
-            };
-
-            if (getDirectUrl) {
-                const downloadUrl = await getDownloadUrl(bestMatch.url, cookiesPath, format);
-                result.downloadUrl = downloadUrl;
-                result.format = format;
-            }
-
-            return result;
-
-        } finally {
-            try {
-                if (fs.existsSync(cookiesPath)) {
-                    fs.unlinkSync(cookiesPath);
-                }
-            } catch (cleanupError) {
-                console.warn('No se pudo eliminar cookies:', cleanupError.message);
-            }
-        }
-    } catch (error) {
-        console.error('Error en processSpotifyTrack:', error.message);
-        throw error;
-    }
-}
-
-// RUTAS DE LA API
-
-// Ruta para obtener información de canción de Spotify
-app.get('/api/spotify/info', async (req, res) => {
-    try {
-        const { url } = req.query;
-
-        if (!url) {
-            return res.status(400).json({
-                error: 'URL de Spotify es requerida',
-                usage: '/api/spotify/info?url=https://open.spotify.com/track/...'
-            });
-        }
-
-        if (!url.includes('spotify.com/track/')) {
-            return res.status(400).json({
-                error: 'URL debe ser de una canción de Spotify',
-                example: 'https://open.spotify.com/track/4iV5W9uYEdYUVa79Axb7Rh'
-            });
-        }
-
-        const result = await processSpotifyTrack(url, false);
-
-        res.json({
-            success: true,
-            data: result
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// Ruta para descargar canción de Spotify
-app.get('/api/spotify/download', async (req, res) => {
-    try {
-        const { url, format = 'bestaudio[ext=m4a]/bestaudio' } = req.query;
-
-        if (!url) {
-            return res.status(400).json({
-                error: 'URL de Spotify es requerida',
-                usage: '/api/spotify/download?url=https://open.spotify.com/track/...'
-            });
-        }
-
-        if (!url.includes('spotify.com/track/')) {
-            return res.status(400).json({
-                error: 'URL debe ser de una canción de Spotify',
-                example: 'https://open.spotify.com/track/4iV5W9uYEdYUVa79Axb7Rh'
-            });
-        }
-
-        const result = await processSpotifyTrack(url, true, format);
-
-        res.json({
-            success: true,
-            data: result,
-            message: 'Usa la URL downloadUrl para descargar la canción directamente'
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// Ruta para buscar canciones en YouTube
-app.get('/api/search', async (req, res) => {
-    try {
-        const { q } = req.query;
-
-        if (!q) {
-            return res.status(400).json({
-                error: 'Parámetro de búsqueda "q" es requerido',
-                usage: '/api/search?q=nombre de la canción'
-            });
-        }
-
-        await ensureYtDlp();
-        const cookiesPath = generateCookiesFile();
-
-        try {
-            const results = await searchYouTube(q, cookiesPath);
-
-            res.json({
-                success: true,
-                data: {
-                    query: q,
-                    results: results
-                }
-            });
-
-        } finally {
-            try {
-                if (fs.existsSync(cookiesPath)) {
-                    fs.unlinkSync(cookiesPath);
-                }
-            } catch (cleanupError) {
-                console.warn('No se pudo eliminar cookies:', cleanupError.message);
-            }
-        }
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// Ruta para obtener solo metadata de YouTube
-app.get('/api/info', async (req, res) => {
+// Ruta para obtener información de video de YouTube
+app.get('/api/youtube/info', async (req, res) => {
     try {
         const { url } = req.query;
 
         if (!url) {
             return res.status(400).json({
                 error: 'URL del video es requerida',
-                usage: '/api/info?url=https://youtube.com/watch?v=...'
+                usage: '/api/youtube/info?url=https://youtube.com/watch?v=...'
             });
         }
 
-        const result = await processYouTubeVideo(url, false);
+        await ensureYtDlp();
+        const cookiesPath = generateYouTubeCookiesFile();
 
-        res.json({
-            success: true,
-            data: result
-        });
+        try {
+            const result = await getYouTubeVideoInfo(url, cookiesPath);
+            res.json({
+                success: true,
+                data: result
+            });
+        } finally {
+            cleanupCookies(cookiesPath);
+        }
     } catch (error) {
         res.status(500).json({
             success: false,
@@ -491,26 +282,37 @@ app.get('/api/info', async (req, res) => {
     }
 });
 
-// Ruta para obtener URL de descarga directa de YouTube
-app.get('/api/download-url', async (req, res) => {
+// Ruta para obtener URL de descarga de YouTube
+app.get('/api/youtube/download-url', async (req, res) => {
     try {
         const { url, format = 'best[ext=mp4]/best' } = req.query;
 
         if (!url) {
             return res.status(400).json({
                 error: 'URL del video es requerida',
-                usage: '/api/download-url?url=https://youtube.com/watch?v=...'
+                usage: '/api/youtube/download-url?url=https://youtube.com/watch?v=...'
             });
         }
 
-        const result = await processYouTubeVideo(url, true, format);
+        await ensureYtDlp();
+        const cookiesPath = generateYouTubeCookiesFile();
 
-        res.json({
-            success: true,
-            data: result,
-            message: 'Usa la URL downloadUrl para descargar el video directamente'
-        });
+        try {
+            const videoInfo = await getYouTubeVideoInfo(url, cookiesPath);
+            const downloadUrl = await getYouTubeDownloadUrl(url, cookiesPath, format);
 
+            res.json({
+                success: true,
+                data: {
+                    ...videoInfo,
+                    downloadUrl: downloadUrl,
+                    format: format
+                },
+                message: 'Usa la URL downloadUrl para descargar el video directamente'
+            });
+        } finally {
+            cleanupCookies(cookiesPath);
+        }
     } catch (error) {
         res.status(500).json({
             success: false,
@@ -519,35 +321,159 @@ app.get('/api/download-url', async (req, res) => {
     }
 });
 
-// Ruta para obtener formatos disponibles
-app.get('/api/formats', async (req, res) => {
+// Ruta para obtener formatos disponibles de YouTube
+app.get('/api/youtube/formats', async (req, res) => {
     try {
         const { url } = req.query;
 
         if (!url) {
             return res.status(400).json({
                 error: 'URL del video es requerida',
-                usage: '/api/formats?url=https://youtube.com/watch?v=...'
+                usage: '/api/youtube/formats?url=https://youtube.com/watch?v=...'
             });
         }
 
-        const result = await processYouTubeVideo(url, false);
+        await ensureYtDlp();
+        const cookiesPath = generateYouTubeCookiesFile();
 
-        res.json({
-            success: true,
-            data: {
-                title: result.title,
-                formats: result.formats,
-                availableQualities: [
-                    'best[ext=mp4]/best',
-                    'worst[ext=mp4]/worst',
-                    'best[height<=720][ext=mp4]/best[height<=720]',
-                    'best[height<=480][ext=mp4]/best[height<=480]',
-                    'bestaudio[ext=m4a]/bestaudio'
-                ]
-            }
+        try {
+            const result = await getYouTubeVideoInfo(url, cookiesPath);
+
+            res.json({
+                success: true,
+                data: {
+                    platform: 'youtube',
+                    title: result.title,
+                    formats: result.formats,
+                    availableQualities: [
+                        'best[ext=mp4]/best',
+                        'worst[ext=mp4]/worst',
+                        'best[height<=720][ext=mp4]/best[height<=720]',
+                        'best[height<=480][ext=mp4]/best[height<=480]',
+                        'bestaudio[ext=m4a]/bestaudio'
+                    ]
+                }
+            });
+        } finally {
+            cleanupCookies(cookiesPath);
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
         });
+    }
+});
 
+// RUTAS DE SPOTIFY
+
+// Ruta para obtener información de track de Spotify
+app.get('/api/spotify/info', async (req, res) => {
+    try {
+        const { url } = req.query;
+
+        if (!url) {
+            return res.status(400).json({
+                error: 'URL del track es requerida',
+                usage: '/api/spotify/info?url=https://open.spotify.com/track/...'
+            });
+        }
+
+        await ensureYtDlp();
+        const cookiesPath = generateSpotifyCookiesFile();
+
+        try {
+            const result = await getSpotifyTrackInfo(url, cookiesPath);
+            res.json({
+                success: true,
+                data: result
+            });
+        } finally {
+            cleanupCookies(cookiesPath);
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Ruta para obtener URL de descarga de Spotify
+app.get('/api/spotify/download-url', async (req, res) => {
+    try {
+        const { url, format = 'bestaudio[ext=m4a]/bestaudio' } = req.query;
+
+        if (!url) {
+            return res.status(400).json({
+                error: 'URL del track es requerida',
+                usage: '/api/spotify/download-url?url=https://open.spotify.com/track/...'
+            });
+        }
+
+        await ensureYtDlp();
+        const cookiesPath = generateSpotifyCookiesFile();
+
+        try {
+            const trackInfo = await getSpotifyTrackInfo(url, cookiesPath);
+            const downloadUrl = await getSpotifyDownloadUrl(url, cookiesPath, format);
+
+            res.json({
+                success: true,
+                data: {
+                    ...trackInfo,
+                    downloadUrl: downloadUrl,
+                    format: format
+                },
+                message: 'Usa la URL downloadUrl para descargar el audio directamente'
+            });
+        } finally {
+            cleanupCookies(cookiesPath);
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Ruta para obtener formatos disponibles de Spotify
+app.get('/api/spotify/formats', async (req, res) => {
+    try {
+        const { url } = req.query;
+
+        if (!url) {
+            return res.status(400).json({
+                error: 'URL del track es requerida',
+                usage: '/api/spotify/formats?url=https://open.spotify.com/track/...'
+            });
+        }
+
+        await ensureYtDlp();
+        const cookiesPath = generateSpotifyCookiesFile();
+
+        try {
+            const result = await getSpotifyTrackInfo(url, cookiesPath);
+
+            res.json({
+                success: true,
+                data: {
+                    platform: 'spotify',
+                    title: result.title,
+                    artist: result.artist,
+                    formats: result.formats,
+                    availableQualities: [
+                        'bestaudio[ext=m4a]/bestaudio',
+                        'bestaudio[ext=mp3]/bestaudio',
+                        'bestaudio[ext=ogg]/bestaudio',
+                        'bestaudio/best'
+                    ]
+                }
+            });
+        } finally {
+            cleanupCookies(cookiesPath);
+        }
     } catch (error) {
         res.status(500).json({
             success: false,
@@ -560,49 +486,31 @@ app.get('/api/formats', async (req, res) => {
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
-        message: 'YouTube/Spotify Download API funcionando',
+        message: 'Multi-Platform Download API funcionando en Vercel',
+        platforms: ['youtube', 'spotify'],
         endpoints: {
-            // Spotify endpoints
-            spotifyInfo: '/api/spotify/info?url=SPOTIFY_TRACK_URL',
-            spotifyDownload: '/api/spotify/download?url=SPOTIFY_TRACK_URL&format=FORMAT',
-            
-            // YouTube endpoints
-            youtubeInfo: '/api/info?url=YOUTUBE_URL',
-            youtubeDownload: '/api/download-url?url=YOUTUBE_URL&format=FORMAT',
-            youtubeFormats: '/api/formats?url=YOUTUBE_URL',
-            
-            // Search endpoint
-            search: '/api/search?q=SEARCH_QUERY'
+            youtube: {
+                info: '/api/youtube/info?url=VIDEO_URL',
+                downloadUrl: '/api/youtube/download-url?url=VIDEO_URL&format=FORMAT',
+                formats: '/api/youtube/formats?url=VIDEO_URL'
+            },
+            spotify: {
+                info: '/api/spotify/info?url=TRACK_URL',
+                downloadUrl: '/api/spotify/download-url?url=TRACK_URL&format=FORMAT',
+                formats: '/api/spotify/formats?url=TRACK_URL'
+            }
         },
-        supportedFormats: {
-            audio: [
-                'bestaudio[ext=m4a]/bestaudio',
-                'bestaudio[ext=mp3]/bestaudio',
-                'worst[ext=m4a]/worst'
-            ],
-            video: [
-                'best[ext=mp4]/best',
-                'worst[ext=mp4]/worst',
-                'best[height<=720][ext=mp4]/best[height<=720]',
-                'best[height<=480][ext=mp4]/best[height<=480]'
-            ]
-        },
-        note: 'Esta API busca canciones de Spotify en YouTube y proporciona URLs de descarga directa'
+        note: 'Esta API proporciona URLs de descarga directa, no almacena archivos en el servidor'
     });
 });
 
 // Ruta raíz
 app.get('/', (req, res) => {
     res.json({
-        message: 'YouTube/Spotify Download API',
+        message: 'Multi-Platform Download API',
         status: 'running',
-        documentation: '/health',
-        features: [
-            'Descargar videos de YouTube',
-            'Buscar y descargar canciones de Spotify via YouTube',
-            'Búsqueda de canciones en YouTube',
-            'Múltiples formatos de descarga'
-        ]
+        platforms: ['YouTube', 'Spotify'],
+        documentation: '/health'
     });
 });
 
@@ -619,12 +527,9 @@ app.use((err, req, res, next) => {
 if (process.env.NODE_ENV !== 'production') {
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
-        console.log(`🚀 API ejecutándose en puerto ${PORT}`);
-        console.log(`📱 Endpoints disponibles:`);
-        console.log(`   - Spotify: http://localhost:${PORT}/api/spotify/info?url=SPOTIFY_URL`);
-        console.log(`   - YouTube: http://localhost:${PORT}/api/info?url=YOUTUBE_URL`);
-        console.log(`   - Búsqueda: http://localhost:${PORT}/api/search?q=QUERY`);
-        console.log(`   - Salud: http://localhost:${PORT}/health`);
+        console.log(`🚀 Multi-Platform API ejecutándose en puerto ${PORT}`);
+        console.log('📺 YouTube endpoints: /api/youtube/*');
+        console.log('🎵 Spotify endpoints: /api/spotify/*');
     });
 }
 
