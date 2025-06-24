@@ -5,37 +5,52 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import os from 'os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const binDir = path.join(__dirname, 'bin');
-const tmpDir = path.join(__dirname, 'tmp');
-const downloadsDir = path.join(__dirname, 'downloads'); // Nueva carpeta para videos descargados
-const ytDlpPath = path.join(binDir, 'yt-dlp');
-
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Servir archivos estáticos desde la carpeta downloads
-app.use('/videos', express.static(downloadsDir));
+// Usar directorios temporales del sistema
+const tmpDir = os.tmpdir();
+const ytDlpPath = path.join(tmpDir, 'yt-dlp');
 
-// Crear directorios necesarios
-function ensureDirectories() {
-    [binDir, tmpDir, downloadsDir].forEach(dir => {
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-            console.log(`Directorio creado: ${dir}`);
-        }
+// Función para descargar yt-dlp si no existe
+async function ensureYtDlp() {
+    if (fs.existsSync(ytDlpPath)) {
+        return;
+    }
+
+    return new Promise((resolve, reject) => {
+        console.log('Descargando yt-dlp...');
+        
+        const command = `curl -L -o "${ytDlpPath}" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp`;
+        
+        exec(command, (error, stdout, stderr) => {
+            if (error) {
+                reject(new Error(`Error descargando yt-dlp: ${error.message}`));
+                return;
+            }
+
+            try {
+                fs.chmodSync(ytDlpPath, 0o755);
+                console.log('yt-dlp descargado correctamente.');
+                resolve();
+            } catch (chmodError) {
+                reject(new Error(`Error configurando permisos: ${chmodError.message}`));
+            }
+        });
     });
 }
 
-function generateCookiesFile() {
+// Función para generar cookies de YouTube
+function generateYouTubeCookiesFile() {
     const now = Date.now();
-    const cookiesPath = path.join(tmpDir, `${now}_cookies.txt`);
+    const cookiesPath = path.join(tmpDir, `${now}_youtube_cookies.txt`);
 
     const netscapeCookies = [
         '# Netscape HTTP Cookie File',
@@ -58,78 +73,39 @@ function generateCookiesFile() {
         fs.writeFileSync(cookiesPath, netscapeCookies.join('\n'));
         return cookiesPath;
     } catch (error) {
-        throw new Error(`Error al crear archivo de cookies: ${error.message}`);
+        throw new Error(`Error al crear archivo de cookies de YouTube: ${error.message}`);
     }
 }
 
-function downloadYtDlp() {
-    return new Promise((resolve, reject) => {
-        console.log('Descargando yt-dlp...');
+// Función para generar cookies de Spotify (básicas)
+function generateSpotifyCookiesFile() {
+    const now = Date.now();
+    const cookiesPath = path.join(tmpDir, `${now}_spotify_cookies.txt`);
 
-        const commands = [
-            `curl -L -o "${ytDlpPath}" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp`,
-            `wget -O "${ytDlpPath}" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp`
-        ];
+    const netscapeCookies = [
+        '# Netscape HTTP Cookie File',
+        '# http://curl.haxx.se/rfc/cookie_spec.html',
+        '# This is a generated file! Do not edit.',
+        '.spotify.com\tTRUE\t/\tFALSE\t0\tsp_t\ttemp_token_placeholder',
+        '.open.spotify.com\tTRUE\t/\tFALSE\t0\tsp_dc\ttemp_dc_placeholder'
+    ];
 
-        const tryDownload = (commandIndex = 0) => {
-            if (commandIndex >= commands.length) {
-                reject(new Error('No se pudo descargar yt-dlp con ningún método'));
-                return;
-            }
-
-            const command = commands[commandIndex];
-            console.log(`Intentando método ${commandIndex + 1}: ${command.split(' ')[0]}`);
-
-            exec(command, (error, stdout, stderr) => {
-                if (error) {
-                    console.warn(`Método ${commandIndex + 1} falló:`, error.message);
-                    tryDownload(commandIndex + 1);
-                    return;
-                }
-
-                if (stderr) {
-                    console.warn(`Advertencia: ${stderr}`);
-                }
-
-                if (!fs.existsSync(ytDlpPath)) {
-                    console.warn(`Archivo no encontrado después de descarga`);
-                    tryDownload(commandIndex + 1);
-                    return;
-                }
-
-                if (process.platform !== 'win32') {
-                    try {
-                        fs.chmodSync(ytDlpPath, 0o755);
-                    } catch (chmodError) {
-                        console.warn('No se pudo cambiar permisos:', chmodError.message);
-                    }
-                }
-
-                console.log('yt-dlp descargado correctamente.');
-                resolve();
-            });
-        };
-
-        tryDownload();
-    });
+    try {
+        fs.writeFileSync(cookiesPath, netscapeCookies.join('\n'));
+        return cookiesPath;
+    } catch (error) {
+        throw new Error(`Error al crear archivo de cookies de Spotify: ${error.message}`);
+    }
 }
 
-// Función para limpiar nombre de archivo
-function sanitizeFilename(filename) {
-    return filename
-        .replace(/[<>:"/\\|?*]/g, '') // Remover caracteres no válidos
-        .replace(/\s+/g, '_')         // Reemplazar espacios con guiones bajos
-        .substring(0, 100);           // Limitar longitud
-}
-
-// Función para obtener información del video
-async function getVideoInfo(videoUrl, cookiesPath) {
+// Función para obtener información de video de YouTube
+async function getYouTubeVideoInfo(videoUrl, cookiesPath) {
     return new Promise((resolve, reject) => {
         const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --dump-json "${videoUrl}"`;
 
         exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
             if (error) {
-                reject(new Error(`Error obteniendo información del video: ${error.message}`));
+                reject(new Error(`Error obteniendo información del video de YouTube: ${error.message}`));
                 return;
             }
 
@@ -140,193 +116,281 @@ async function getVideoInfo(videoUrl, cookiesPath) {
             try {
                 const videoInfo = JSON.parse(stdout);
                 resolve({
+                    platform: 'youtube',
                     title: videoInfo.title || 'Sin título',
                     duration: videoInfo.duration || 0,
-                    resolution: videoInfo.resolution || videoInfo.height ? `${videoInfo.height}p` : 'N/A',
+                    resolution: videoInfo.resolution || (videoInfo.height ? `${videoInfo.height}p` : 'N/A'),
                     thumbnail: videoInfo.thumbnail || null,
                     uploader: videoInfo.uploader || null,
                     uploadDate: videoInfo.upload_date || null,
                     viewCount: videoInfo.view_count || null,
                     description: videoInfo.description || null,
-                    id: videoInfo.id || null
+                    id: videoInfo.id || null,
+                    url: videoInfo.webpage_url || videoUrl,
+                    formats: videoInfo.formats ? videoInfo.formats.map(f => ({
+                        format_id: f.format_id,
+                        ext: f.ext,
+                        quality: f.quality,
+                        filesize: f.filesize,
+                        url: f.url
+                    })).slice(0, 10) : []
                 });
             } catch (e) {
-                reject(new Error(`Error analizando datos del video: ${e.message}`));
+                reject(new Error(`Error analizando datos del video de YouTube: ${e.message}`));
             }
         });
     });
 }
 
-// Función para descargar video localmente
-async function downloadVideoToLocal(videoUrl, cookiesPath, videoInfo) {
+// Función para obtener información de track de Spotify
+async function getSpotifyTrackInfo(trackUrl, cookiesPath) {
     return new Promise((resolve, reject) => {
-        const safeTitle = sanitizeFilename(videoInfo.title);
-        const filename = `${safeTitle}_${videoInfo.id || Date.now()}.%(ext)s`;
-        const outputPath = path.join(downloadsDir, filename);
+        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --cookies "${cookiesPath}" --dump-json "${trackUrl}"`;
 
-        // Comando para descargar el video en la mejor calidad MP4 disponible
-        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --format "best[ext=mp4]/best" --output "${outputPath}" "${videoUrl}"`;
-
-        console.log(`Iniciando descarga: ${videoInfo.title}`);
-
-        exec(command, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
+        exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
             if (error) {
-                reject(new Error(`Error descargando video: ${error.message}`));
+                reject(new Error(`Error obteniendo información del track de Spotify: ${error.message}`));
                 return;
             }
 
             if (stderr) {
-                console.warn('yt-dlp stderr durante descarga:', stderr);
+                console.warn('yt-dlp stderr:', stderr);
             }
 
-            // Buscar el archivo descargado
             try {
-                const files = fs.readdirSync(downloadsDir);
-                const downloadedFile = files.find(file => 
-                    file.includes(safeTitle) || 
-                    (videoInfo.id && file.includes(videoInfo.id))
-                );
-
-                if (!downloadedFile) {
-                    reject(new Error('No se pudo encontrar el archivo descargado'));
-                    return;
-                }
-
-                const filePath = path.join(downloadsDir, downloadedFile);
-                const stats = fs.statSync(filePath);
-
-                console.log(`Video descargado exitosamente: ${downloadedFile}`);
-
+                const trackInfo = JSON.parse(stdout);
                 resolve({
-                    filename: downloadedFile,
-                    path: filePath,
-                    size: stats.size,
-                    url: `/videos/${downloadedFile}`
+                    platform: 'spotify',
+                    title: trackInfo.title || 'Sin título',
+                    artist: trackInfo.artist || trackInfo.uploader || 'Artista desconocido',
+                    album: trackInfo.album || null,
+                    duration: trackInfo.duration || 0,
+                    thumbnail: trackInfo.thumbnail || null,
+                    releaseDate: trackInfo.release_date || trackInfo.upload_date || null,
+                    trackNumber: trackInfo.track_number || null,
+                    id: trackInfo.id || null,
+                    url: trackInfo.webpage_url || trackUrl,
+                    formats: trackInfo.formats ? trackInfo.formats.map(f => ({
+                        format_id: f.format_id,
+                        ext: f.ext,
+                        quality: f.quality,
+                        filesize: f.filesize,
+                        url: f.url
+                    })).slice(0, 10) : []
                 });
             } catch (e) {
-                reject(new Error(`Error verificando descarga: ${e.message}`));
+                reject(new Error(`Error analizando datos del track de Spotify: ${e.message}`));
             }
         });
     });
 }
 
-function cleanup() {
+// Función para obtener URL de descarga de YouTube
+async function getYouTubeDownloadUrl(videoUrl, cookiesPath, format = 'best[ext=mp4]/best') {
+    return new Promise((resolve, reject) => {
+        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --format "${format}" --get-url "${videoUrl}"`;
+
+        exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+            if (error) {
+                reject(new Error(`Error obteniendo URL de descarga de YouTube: ${error.message}`));
+                return;
+            }
+
+            if (stderr) {
+                console.warn('yt-dlp stderr:', stderr);
+            }
+
+            const downloadUrl = stdout.trim();
+            if (!downloadUrl || !downloadUrl.startsWith('http')) {
+                reject(new Error('No se pudo obtener URL de descarga válida de YouTube'));
+                return;
+            }
+
+            resolve(downloadUrl);
+        });
+    });
+}
+
+// Función para obtener URL de descarga de Spotify
+async function getSpotifyDownloadUrl(trackUrl, cookiesPath, format = 'bestaudio[ext=m4a]/bestaudio') {
+    return new Promise((resolve, reject) => {
+        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --cookies "${cookiesPath}" --format "${format}" --get-url "${trackUrl}"`;
+
+        exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+            if (error) {
+                reject(new Error(`Error obteniendo URL de descarga de Spotify: ${error.message}`));
+                return;
+            }
+
+            if (stderr) {
+                console.warn('yt-dlp stderr:', stderr);
+            }
+
+            const downloadUrl = stdout.trim();
+            if (!downloadUrl || !downloadUrl.startsWith('http')) {
+                reject(new Error('No se pudo obtener URL de descarga válida de Spotify'));
+                return;
+            }
+
+            resolve(downloadUrl);
+        });
+    });
+}
+
+// Función para limpiar cookies
+function cleanupCookies(cookiesPath) {
     try {
-        // Limpiar cookies temporales
-        const files = fs.readdirSync(tmpDir);
-        files.forEach(file => {
-            if (file.includes('_cookies.txt')) {
-                const filePath = path.join(tmpDir, file);
-                const stats = fs.statSync(filePath);
-                const now = Date.now();
-                const fileAge = now - stats.mtime.getTime();
-
-                if (fileAge > 3600000) { // 1 hora
-                    fs.unlinkSync(filePath);
-                    console.log('Archivo temporal eliminado:', file);
-                }
-            }
-        });
-
-        // Opcional: Limpiar videos antiguos (descomenta si quieres auto-limpieza)
-        /*
-        const videoFiles = fs.readdirSync(downloadsDir);
-        videoFiles.forEach(file => {
-            const filePath = path.join(downloadsDir, file);
-            const stats = fs.statSync(filePath);
-            const now = Date.now();
-            const fileAge = now - stats.mtime.getTime();
-
-            // Eliminar videos más antiguos que 24 horas
-            if (fileAge > 86400000) {
-                fs.unlinkSync(filePath);
-                console.log('Video antiguo eliminado:', file);
-            }
-        });
-        */
-    } catch (error) {
-        console.warn('Error en limpieza:', error.message);
+        if (fs.existsSync(cookiesPath)) {
+            fs.unlinkSync(cookiesPath);
+        }
+    } catch (cleanupError) {
+        console.warn('No se pudo eliminar cookies:', cleanupError.message);
     }
 }
 
-// Función principal
-async function processYouTubeVideo(videoUrl, downloadVideo = false) {
+// RUTAS DE YOUTUBE
+
+// Ruta para obtener información de video de YouTube
+app.get('/api/youtube/info', async (req, res) => {
     try {
-        ensureDirectories();
-        cleanup();
+        const { url } = req.query;
 
-        if (!fs.existsSync(ytDlpPath)) {
-            await downloadYtDlp();
+        if (!url) {
+            return res.status(400).json({
+                error: 'URL del video es requerida',
+                usage: '/api/youtube/info?url=https://youtube.com/watch?v=...'
+            });
         }
 
-        if (process.platform !== 'win32') {
-            try {
-                const stats = fs.statSync(ytDlpPath);
-                if (!(stats.mode & 0o100)) {
-                    fs.chmodSync(ytDlpPath, 0o755);
-                }
-            } catch (permError) {
-                console.warn('No se pudieron verificar/cambiar permisos:', permError.message);
-            }
-        }
-
-        const cookiesPath = generateCookiesFile();
+        await ensureYtDlp();
+        const cookiesPath = generateYouTubeCookiesFile();
 
         try {
-            // Obtener información del video
-            const videoInfo = await getVideoInfo(videoUrl, cookiesPath);
-
-            if (downloadVideo) {
-                // Descargar video localmente
-                const downloadResult = await downloadVideoToLocal(videoUrl, cookiesPath, videoInfo);
-
-                return {
-                    ...videoInfo,
-                    download: {
-                        filename: downloadResult.filename,
-                        size: downloadResult.size,
-                        url: downloadResult.url,
-                        downloadUrl: `http://skyapi-production.up.railway.app${downloadResult.url}`
-                    }
-                };
-            } else {
-                return videoInfo;
-            }
+            const result = await getYouTubeVideoInfo(url, cookiesPath);
+            res.json({
+                success: true,
+                data: result
+            });
         } finally {
-            try {
-                if (fs.existsSync(cookiesPath)) {
-                    fs.unlinkSync(cookiesPath);
+            cleanupCookies(cookiesPath);
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Ruta para obtener URL de descarga de YouTube
+app.get('/api/youtube/download-url', async (req, res) => {
+    try {
+        const { url, format = 'best[ext=mp4]/best' } = req.query;
+
+        if (!url) {
+            return res.status(400).json({
+                error: 'URL del video es requerida',
+                usage: '/api/youtube/download-url?url=https://youtube.com/watch?v=...'
+            });
+        }
+
+        await ensureYtDlp();
+        const cookiesPath = generateYouTubeCookiesFile();
+
+        try {
+            const videoInfo = await getYouTubeVideoInfo(url, cookiesPath);
+            const downloadUrl = await getYouTubeDownloadUrl(url, cookiesPath, format);
+
+            res.json({
+                success: true,
+                data: {
+                    ...videoInfo,
+                    downloadUrl: downloadUrl,
+                    format: format
+                },
+                message: 'Usa la URL downloadUrl para descargar el video directamente'
+            });
+        } finally {
+            cleanupCookies(cookiesPath);
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Ruta para obtener formatos disponibles de YouTube
+app.get('/api/youtube/formats', async (req, res) => {
+    try {
+        const { url } = req.query;
+
+        if (!url) {
+            return res.status(400).json({
+                error: 'URL del video es requerida',
+                usage: '/api/youtube/formats?url=https://youtube.com/watch?v=...'
+            });
+        }
+
+        await ensureYtDlp();
+        const cookiesPath = generateYouTubeCookiesFile();
+
+        try {
+            const result = await getYouTubeVideoInfo(url, cookiesPath);
+
+            res.json({
+                success: true,
+                data: {
+                    platform: 'youtube',
+                    title: result.title,
+                    formats: result.formats,
+                    availableQualities: [
+                        'best[ext=mp4]/best',
+                        'worst[ext=mp4]/worst',
+                        'best[height<=720][ext=mp4]/best[height<=720]',
+                        'best[height<=480][ext=mp4]/best[height<=480]',
+                        'bestaudio[ext=m4a]/bestaudio'
+                    ]
                 }
-            } catch (cleanupError) {
-                console.warn('No se pudo eliminar cookies:', cleanupError.message);
-            }
+            });
+        } finally {
+            cleanupCookies(cookiesPath);
         }
     } catch (error) {
-        console.error('Error en processYouTubeVideo:', error.message);
-        throw error;
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
-}
+});
 
-// RUTAS DE LA API
+// RUTAS DE SPOTIFY
 
-// Ruta para obtener solo metadata
-app.get('/api/info', async (req, res) => {
+// Ruta para obtener información de track de Spotify
+app.get('/api/spotify/info', async (req, res) => {
     try {
         const { url } = req.query;
 
         if (!url) {
             return res.status(400).json({
-                error: 'URL del video es requerida',
-                usage: '/api/info?url=https://youtube.com/watch?v=...'
+                error: 'URL del track es requerida',
+                usage: '/api/spotify/info?url=https://open.spotify.com/track/...'
             });
         }
 
-        const result = await processYouTubeVideo(url, false);
+        await ensureYtDlp();
+        const cookiesPath = generateSpotifyCookiesFile();
 
-        res.json({
-            success: true,
-            data: result
-        });
+        try {
+            const result = await getSpotifyTrackInfo(url, cookiesPath);
+            res.json({
+                success: true,
+                data: result
+            });
+        } finally {
+            cleanupCookies(cookiesPath);
+        }
     } catch (error) {
         res.status(500).json({
             success: false,
@@ -335,84 +399,81 @@ app.get('/api/info', async (req, res) => {
     }
 });
 
-// Ruta para descargar video localmente
-app.get('/api/download/video', async (req, res) => {
+// Ruta para obtener URL de descarga de Spotify
+app.get('/api/spotify/download-url', async (req, res) => {
+    try {
+        const { url, format = 'bestaudio[ext=m4a]/bestaudio' } = req.query;
+
+        if (!url) {
+            return res.status(400).json({
+                error: 'URL del track es requerida',
+                usage: '/api/spotify/download-url?url=https://open.spotify.com/track/...'
+            });
+        }
+
+        await ensureYtDlp();
+        const cookiesPath = generateSpotifyCookiesFile();
+
+        try {
+            const trackInfo = await getSpotifyTrackInfo(url, cookiesPath);
+            const downloadUrl = await getSpotifyDownloadUrl(url, cookiesPath, format);
+
+            res.json({
+                success: true,
+                data: {
+                    ...trackInfo,
+                    downloadUrl: downloadUrl,
+                    format: format
+                },
+                message: 'Usa la URL downloadUrl para descargar el audio directamente'
+            });
+        } finally {
+            cleanupCookies(cookiesPath);
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Ruta para obtener formatos disponibles de Spotify
+app.get('/api/spotify/formats', async (req, res) => {
     try {
         const { url } = req.query;
 
         if (!url) {
             return res.status(400).json({
-                error: 'URL del video es requerida',
-                usage: '/api/download/video?url=https://youtube.com/watch?v=...'
+                error: 'URL del track es requerida',
+                usage: '/api/spotify/formats?url=https://open.spotify.com/track/...'
             });
         }
 
-        const result = await processYouTubeVideo(url, true);
+        await ensureYtDlp();
+        const cookiesPath = generateSpotifyCookiesFile();
 
-        res.json({
-            success: true,
-            data: result
-        });
+        try {
+            const result = await getSpotifyTrackInfo(url, cookiesPath);
 
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// Ruta para listar videos descargados
-app.get('/api/downloads', (req, res) => {
-    try {
-        const files = fs.readdirSync(downloadsDir);
-        const videoFiles = files.map(file => {
-            const filePath = path.join(downloadsDir, file);
-            const stats = fs.statSync(filePath);
-
-            return {
-                filename: file,
-                size: stats.size,
-                created: stats.birthtime,
-                url: `/videos/${file}`,
-                downloadUrl: `http://skyapi-production.up.railway.app/videos/${file}`
-            };
-        }).sort((a, b) => new Date(b.created) - new Date(a.created));
-
-        res.json({
-            success: true,
-            data: {
-                count: videoFiles.length,
-                videos: videoFiles
-            }
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// Ruta para eliminar un video específico
-app.delete('/api/downloads/:filename', (req, res) => {
-    try {
-        const { filename } = req.params;
-        const filePath = path.join(downloadsDir, filename);
-
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({
-                success: false,
-                error: 'Archivo no encontrado'
+            res.json({
+                success: true,
+                data: {
+                    platform: 'spotify',
+                    title: result.title,
+                    artist: result.artist,
+                    formats: result.formats,
+                    availableQualities: [
+                        'bestaudio[ext=m4a]/bestaudio',
+                        'bestaudio[ext=mp3]/bestaudio',
+                        'bestaudio[ext=ogg]/bestaudio',
+                        'bestaudio/best'
+                    ]
+                }
             });
+        } finally {
+            cleanupCookies(cookiesPath);
         }
-
-        fs.unlinkSync(filePath);
-
-        res.json({
-            success: true,
-            message: `Archivo ${filename} eliminado correctamente`
-        });
     } catch (error) {
         res.status(500).json({
             success: false,
@@ -425,13 +486,31 @@ app.delete('/api/downloads/:filename', (req, res) => {
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
-        message: 'YouTube Video Download API funcionando',
+        message: 'Multi-Platform Download API funcionando en Vercel',
+        platforms: ['youtube', 'spotify'],
         endpoints: {
-            info: '/api/info?url=VIDEO_URL',
-            download: '/api/download/video?url=VIDEO_URL',
-            list: '/api/downloads',
-            delete: '/api/downloads/FILENAME (DELETE method)'
-        }
+            youtube: {
+                info: '/api/youtube/info?url=VIDEO_URL',
+                downloadUrl: '/api/youtube/download-url?url=VIDEO_URL&format=FORMAT',
+                formats: '/api/youtube/formats?url=VIDEO_URL'
+            },
+            spotify: {
+                info: '/api/spotify/info?url=TRACK_URL',
+                downloadUrl: '/api/spotify/download-url?url=TRACK_URL&format=FORMAT',
+                formats: '/api/spotify/formats?url=TRACK_URL'
+            }
+        },
+        note: 'Esta API proporciona URLs de descarga directa, no almacena archivos en el servidor'
+    });
+});
+
+// Ruta raíz
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Multi-Platform Download API',
+        status: 'running',
+        platforms: ['YouTube', 'Spotify'],
+        documentation: '/health'
     });
 });
 
@@ -444,13 +523,14 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Inicializar servidor
-app.listen(PORT, () => {
-    console.log(`🚀 API YouTube Video Download ejecutándose en puerto ${PORT}`);
-    console.log(`📊 Salud: http://skyapi-production.up.railway.app/health`);
-    console.log(`📹 Descargar video: http://skyapi-production.up.railway.app/api/download/video?url=https://youtube.com/watch?v=dQw4w9WgXcQ`);
-    console.log(`📂 Listar descargas: http://skyapi-production.up.railway.app/api/downloads`);
-    console.log(`🎥 Videos servidos en: http://skyapi-production.up.railway.app/videos/`);
-});
+// Para desarrollo local
+if (process.env.NODE_ENV !== 'production') {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+        console.log(`🚀 Multi-Platform API ejecutándose en puerto ${PORT}`);
+        console.log('📺 YouTube endpoints: /api/youtube/*');
+        console.log('🎵 Spotify endpoints: /api/spotify/*');
+    });
+}
 
 export default app;
