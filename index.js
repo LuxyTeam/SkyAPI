@@ -9,8 +9,8 @@ import { dirname } from 'path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const binDir = path.join(__dirname, 'bin');
 const tmpDir = path.join(__dirname, 'tmp');
-const downloadsDir = path.join(__dirname, 'downloads'); // Nueva carpeta para videos descargados
-const audioDir = path.join(__dirname, 'audio'); // Nueva carpeta para audios convertidos
+const downloadsDir = path.join(__dirname, 'downloads');
+const audioDir = path.join(__dirname, 'audio');
 const ytDlpPath = path.join(binDir, 'yt-dlp');
 
 const app = express();
@@ -21,7 +21,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Servir archivos estáticos desde la carpeta downloads y audio
+// Servir archivos estáticos
 app.use('/videos', express.static(downloadsDir));
 app.use('/audio', express.static(audioDir));
 
@@ -33,35 +33,6 @@ function ensureDirectories() {
             console.log(`Directorio creado: ${dir}`);
         }
     });
-}
-
-function generateCookiesFile() {
-    const now = Date.now();
-    const cookiesPath = path.join(tmpDir, `${now}_cookies.txt`);
-
-    const netscapeCookies = [
-        '# Netscape HTTP Cookie File',
-        '# http://curl.haxx.se/rfc/cookie_spec.html',
-        '# This is a generated file!  Do not edit.',
-        '.youtube.com\tTRUE\t/\tTRUE\t1775939339\t__Secure-1PSIDTS\tsidts-CjIB7pHpteU8svvP7SINYgQI7auRSlFiz53gkoICGLnRp55N20CdgsgnQHnEQ7iFnBBIxBAA',
-        '.youtube.com\tTRUE\t/\tTRUE\t1775939339\t__Secure-3PSIDTS\tsidts-CjIB7pHpteU8svvP7SINYgQI7auRSlFiz53gkoICGLnRp55N20CdgsgnQHnEQ7iFnBBIxBAA',
-        '.youtube.com\tTRUE\t/\tTRUE\t1784957601\t__Secure-3PAPISID\thrUFkzqIw_zF9izw/A66_39yGeLLjUGAXN',
-        '.youtube.com\tTRUE\t/\tTRUE\t1776018736\t__Secure-3PSIDCC\tAKEyXzW7YaEfmRjqhIl2Lbut8Nl_d0CFSWQ4zmSE67S95L4P9wvHLQcDt9bLdbZIojNVoeW7',
-        '.youtube.com\tTRUE\t/\tTRUE\t1784957601\t__Secure-3PSID\tg.a000yQhzMHhDmgBxOJmcfhmuvCmOLsZ6bgr988YiVv4MqUmcEert_5vEi8Doy6EXNAJnczCIIAACgYKAdESARQSFQHGX2Mi5MA_rTbNKbhKYf-okGxuVBoVAUF8yKpO_ZS0r9UiQ_EdI9TFXMyU0076',
-        '.youtube.com\tTRUE\t/\tTRUE\t1785375272\tPREF\tf6=40000000&tz=America.Mexico_City',
-        '.youtube.com\tTRUE\t/\tTRUE\t1750817067\tGPS\t1',
-        '.youtube.com\tTRUE\t/\tTRUE\t1766367276\tVISITOR_INFO1_LIVE\tde-HbH90xzI',
-        '.youtube.com\tTRUE\t/\tTRUE\t1766367276\tVISITOR_PRIVACY_METADATA\tCgJNWBIEGgAgag%3D%3D',
-        '.youtube.com\tTRUE\t/\tTRUE\t0\tYSC\tfIfFa_ifKL0',
-        '.youtube.com\tTRUE\t/\tTRUE\t1766367267\t__Secure-ROLLOUT_TOKEN\tCLTssqW864iVtAEQgP-vmqP_jQMY0MrJkLeLjgM%3D'
-    ];
-
-    try {
-        fs.writeFileSync(cookiesPath, netscapeCookies.join('\n'));
-        return cookiesPath;
-    } catch (error) {
-        throw new Error(`Error al crear archivo de cookies: ${error.message}`);
-    }
 }
 
 function downloadYtDlp() {
@@ -119,19 +90,36 @@ function downloadYtDlp() {
 // Función para limpiar nombre de archivo
 function sanitizeFilename(filename) {
     return filename
-        .replace(/[<>:"/\\|?*]/g, '') // Remover caracteres no válidos
-        .replace(/\s+/g, '_')         // Reemplazar espacios con guiones bajos
-        .substring(0, 100);           // Limitar longitud
+        .replace(/[<>:"/\\|?*]/g, '')
+        .replace(/\s+/g, '_')
+        .substring(0, 100);
 }
 
-// Función para obtener información del video
-async function getVideoInfo(videoUrl, cookiesPath) {
+// Función mejorada para obtener información del video
+async function getVideoInfo(videoUrl) {
     return new Promise((resolve, reject) => {
-        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --dump-json "${videoUrl}"`;
+        // Comando simplificado sin cookies ni po_token problemático
+        const command = `"${ytDlpPath}" --no-check-certificates --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --dump-json "${videoUrl}"`;
 
         exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
             if (error) {
-                reject(new Error(`Error obteniendo información del video: ${error.message}`));
+                // Si falla, intentar con método alternativo
+                console.warn('Primer intento falló, probando método alternativo...');
+                const fallbackCommand = `"${ytDlpPath}" --no-check-certificates --dump-json --format "best" "${videoUrl}"`;
+                
+                exec(fallbackCommand, { maxBuffer: 1024 * 1024 * 10 }, (error2, stdout2, stderr2) => {
+                    if (error2) {
+                        reject(new Error(`Error obteniendo información del video: ${error2.message}`));
+                        return;
+                    }
+
+                    try {
+                        const videoInfo = JSON.parse(stdout2);
+                        resolve(parseVideoInfo(videoInfo));
+                    } catch (e) {
+                        reject(new Error(`Error analizando datos del video: ${e.message}`));
+                    }
+                });
                 return;
             }
 
@@ -141,17 +129,7 @@ async function getVideoInfo(videoUrl, cookiesPath) {
 
             try {
                 const videoInfo = JSON.parse(stdout);
-                resolve({
-                    title: videoInfo.title || 'Sin título',
-                    duration: videoInfo.duration || 0,
-                    resolution: videoInfo.resolution || videoInfo.height ? `${videoInfo.height}p` : 'N/A',
-                    thumbnail: videoInfo.thumbnail || null,
-                    uploader: videoInfo.uploader || null,
-                    uploadDate: videoInfo.upload_date || null,
-                    viewCount: videoInfo.view_count || null,
-                    description: videoInfo.description || null,
-                    id: videoInfo.id || null
-                });
+                resolve(parseVideoInfo(videoInfo));
             } catch (e) {
                 reject(new Error(`Error analizando datos del video: ${e.message}`));
             }
@@ -159,29 +137,53 @@ async function getVideoInfo(videoUrl, cookiesPath) {
     });
 }
 
-// Función para descargar video localmente
-async function downloadVideoToLocal(videoUrl, cookiesPath, videoInfo) {
+function parseVideoInfo(videoInfo) {
+    return {
+        title: videoInfo.title || 'Sin título',
+        duration: videoInfo.duration || 0,
+        resolution: videoInfo.resolution || videoInfo.height ? `${videoInfo.height}p` : 'N/A',
+        thumbnail: videoInfo.thumbnail || null,
+        uploader: videoInfo.uploader || null,
+        uploadDate: videoInfo.upload_date || null,
+        viewCount: videoInfo.view_count || null,
+        description: videoInfo.description || null,
+        id: videoInfo.id || null
+    };
+}
+
+// Función mejorada para descargar video
+async function downloadVideoToLocal(videoUrl, videoInfo) {
     return new Promise((resolve, reject) => {
         const safeTitle = sanitizeFilename(videoInfo.title);
         const filename = `${safeTitle}_${videoInfo.id || Date.now()}.%(ext)s`;
         const outputPath = path.join(downloadsDir, filename);
 
-        // Comando para descargar el video en la mejor calidad MP4 disponible
-        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --format "best[ext=mp4]/best" --output "${outputPath}" "${videoUrl}"`;
+        // Comando simplificado para descargar video
+        const command = `"${ytDlpPath}" --no-check-certificates --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --format "best[ext=mp4]/best" --output "${outputPath}" "${videoUrl}"`;
 
         console.log(`Iniciando descarga: ${videoInfo.title}`);
 
         exec(command, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
             if (error) {
-                reject(new Error(`Error descargando video: ${error.message}`));
+                // Intentar con formato alternativo
+                console.warn('Descarga falló, intentando formato alternativo...');
+                const fallbackCommand = `"${ytDlpPath}" --no-check-certificates --format "worst[ext=mp4]/worst" --output "${outputPath}" "${videoUrl}"`;
+                
+                exec(fallbackCommand, { maxBuffer: 1024 * 1024 * 50 }, (error2, stdout2, stderr2) => {
+                    if (error2) {
+                        reject(new Error(`Error descargando video: ${error2.message}`));
+                        return;
+                    }
+                    
+                    resolveDownload();
+                });
                 return;
             }
 
-            if (stderr) {
-                console.warn('yt-dlp stderr durante descarga:', stderr);
-            }
+            resolveDownload();
+        });
 
-            // Buscar el archivo descargado
+        function resolveDownload() {
             try {
                 const files = fs.readdirSync(downloadsDir);
                 const downloadedFile = files.find(file => 
@@ -208,33 +210,43 @@ async function downloadVideoToLocal(videoUrl, cookiesPath, videoInfo) {
             } catch (e) {
                 reject(new Error(`Error verificando descarga: ${e.message}`));
             }
-        });
+        }
     });
 }
 
-// Nueva función para descargar directamente como audio
-async function downloadAudioToLocal(videoUrl, cookiesPath, videoInfo, format = 'mp3', quality = '192') {
+// Función mejorada para descargar audio
+async function downloadAudioToLocal(videoUrl, videoInfo, format = 'mp3', quality = '192') {
     return new Promise((resolve, reject) => {
         const safeTitle = sanitizeFilename(videoInfo.title);
         const filename = `${safeTitle}_${videoInfo.id || Date.now()}.${format}`;
         const outputPath = path.join(audioDir, filename);
 
-        // Comando para descargar directamente como audio con yt-dlp y ffmpeg
-        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --extract-audio --audio-format ${format} --audio-quality ${quality} --output "${outputPath}" "${videoUrl}"`;
+        // Comando simplificado para audio
+        const command = `"${ytDlpPath}" --no-check-certificates --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --extract-audio --audio-format ${format} --audio-quality ${quality} --output "${outputPath}" "${videoUrl}"`;
 
         console.log(`Iniciando descarga de audio: ${videoInfo.title}`);
 
         exec(command, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
             if (error) {
-                reject(new Error(`Error descargando audio: ${error.message}`));
+                // Intentar método alternativo para audio
+                console.warn('Descarga de audio falló, intentando método alternativo...');
+                const fallbackCommand = `"${ytDlpPath}" --no-check-certificates --extract-audio --audio-format ${format} --output "${outputPath}" "${videoUrl}"`;
+                
+                exec(fallbackCommand, { maxBuffer: 1024 * 1024 * 50 }, (error2, stdout2, stderr2) => {
+                    if (error2) {
+                        reject(new Error(`Error descargando audio: ${error2.message}`));
+                        return;
+                    }
+                    
+                    resolveAudioDownload();
+                });
                 return;
             }
 
-            if (stderr) {
-                console.warn('yt-dlp stderr durante descarga de audio:', stderr);
-            }
+            resolveAudioDownload();
+        });
 
-            // Verificar que el archivo fue creado
+        function resolveAudioDownload() {
             try {
                 if (!fs.existsSync(outputPath)) {
                     reject(new Error('No se pudo encontrar el archivo de audio descargado'));
@@ -255,18 +267,17 @@ async function downloadAudioToLocal(videoUrl, cookiesPath, videoInfo, format = '
             } catch (e) {
                 reject(new Error(`Error verificando descarga de audio: ${e.message}`));
             }
-        });
+        }
     });
 }
 
-// Función para convertir video existente a audio con ffmpeg
+// Función para convertir video a audio con ffmpeg
 async function convertVideoToAudio(videoPath, format = 'mp3', quality = '192') {
     return new Promise((resolve, reject) => {
         const videoName = path.basename(videoPath, path.extname(videoPath));
         const audioFilename = `${videoName}.${format}`;
         const audioPath = path.join(audioDir, audioFilename);
 
-        // Configurar calidad según el formato
         let qualityParam;
         if (format === 'mp3') {
             qualityParam = `-b:a ${quality}k`;
@@ -286,10 +297,6 @@ async function convertVideoToAudio(videoPath, format = 'mp3', quality = '192') {
             if (error) {
                 reject(new Error(`Error convirtiendo a audio: ${error.message}`));
                 return;
-            }
-
-            if (stderr) {
-                console.warn('ffmpeg stderr:', stderr);
             }
 
             try {
@@ -318,7 +325,7 @@ async function convertVideoToAudio(videoPath, format = 'mp3', quality = '192') {
 
 function cleanup() {
     try {
-        // Limpiar cookies temporales
+        // Limpiar archivos temporales
         const files = fs.readdirSync(tmpDir);
         files.forEach(file => {
             if (file.includes('_cookies.txt')) {
@@ -333,31 +340,12 @@ function cleanup() {
                 }
             }
         });
-
-        // Opcional: Limpiar archivos antiguos
-        /*
-        [downloadsDir, audioDir].forEach(dir => {
-            const files = fs.readdirSync(dir);
-            files.forEach(file => {
-                const filePath = path.join(dir, file);
-                const stats = fs.statSync(filePath);
-                const now = Date.now();
-                const fileAge = now - stats.mtime.getTime();
-
-                // Eliminar archivos más antiguos que 24 horas
-                if (fileAge > 86400000) {
-                    fs.unlinkSync(filePath);
-                    console.log('Archivo antiguo eliminado:', file);
-                }
-            });
-        });
-        */
     } catch (error) {
         console.warn('Error en limpieza:', error.message);
     }
 }
 
-// Función principal
+// Función principal mejorada
 async function processYouTubeVideo(videoUrl, downloadVideo = false, downloadAudio = false, audioFormat = 'mp3', audioQuality = '192') {
     try {
         ensureDirectories();
@@ -378,54 +366,40 @@ async function processYouTubeVideo(videoUrl, downloadVideo = false, downloadAudi
             }
         }
 
-        const cookiesPath = generateCookiesFile();
+        // Obtener información del video sin cookies problemáticas
+        const videoInfo = await getVideoInfo(videoUrl);
+        let result = { ...videoInfo };
 
-        try {
-            // Obtener información del video
-            const videoInfo = await getVideoInfo(videoUrl, cookiesPath);
-            let result = { ...videoInfo };
-
-            if (downloadVideo) {
-                // Descargar video localmente
-                const downloadResult = await downloadVideoToLocal(videoUrl, cookiesPath, videoInfo);
-                result.download = {
-                    filename: downloadResult.filename,
-                    size: downloadResult.size,
-                    url: downloadResult.url,
-                    downloadUrl: `https://skyapi-production-e3e0.up.railway.app${downloadResult.url}`
-                };
-            }
-
-            if (downloadAudio) {
-                // Descargar directamente como audio
-                const audioResult = await downloadAudioToLocal(videoUrl, cookiesPath, videoInfo, audioFormat, audioQuality);
-                result.audio = {
-                    filename: audioResult.filename,
-                    size: audioResult.size,
-                    format: audioResult.format,
-                    quality: audioResult.quality,
-                    url: audioResult.url,
-                    downloadUrl: `http://skyapi-production-e3e0.up.railway.app${audioResult.url}`
-                };
-            }
-
-            return result;
-        } finally {
-            try {
-                if (fs.existsSync(cookiesPath)) {
-                    fs.unlinkSync(cookiesPath);
-                }
-            } catch (cleanupError) {
-                console.warn('No se pudo eliminar cookies:', cleanupError.message);
-            }
+        if (downloadVideo) {
+            const downloadResult = await downloadVideoToLocal(videoUrl, videoInfo);
+            result.download = {
+                filename: downloadResult.filename,
+                size: downloadResult.size,
+                url: downloadResult.url,
+                downloadUrl: `https://skyapi-production-e3e0.up.railway.app${downloadResult.url}`
+            };
         }
+
+        if (downloadAudio) {
+            const audioResult = await downloadAudioToLocal(videoUrl, videoInfo, audioFormat, audioQuality);
+            result.audio = {
+                filename: audioResult.filename,
+                size: audioResult.size,
+                format: audioResult.format,
+                quality: audioResult.quality,
+                url: audioResult.url,
+                downloadUrl: `https://skyapi-production-e3e0.up.railway.app${audioResult.url}`
+            };
+        }
+
+        return result;
     } catch (error) {
         console.error('Error en processYouTubeVideo:', error.message);
         throw error;
     }
 }
 
-// RUTAS DE LA API
+// RUTAS DE LA API (sin cambios significativos)
 
 // Ruta para obtener solo metadata
 app.get('/api/info', async (req, res) => {
@@ -453,7 +427,7 @@ app.get('/api/info', async (req, res) => {
     }
 });
 
-// Ruta para descargar video localmente
+// Ruta para descargar video
 app.get('/api/download/video', async (req, res) => {
     try {
         const { url } = req.query;
@@ -480,7 +454,7 @@ app.get('/api/download/video', async (req, res) => {
     }
 });
 
-// Nueva ruta para descargar directamente como audio
+// Ruta para descargar audio
 app.get('/api/download/audio', async (req, res) => {
     try {
         const { url, format = 'mp3', quality = '192' } = req.query;
@@ -492,7 +466,6 @@ app.get('/api/download/audio', async (req, res) => {
             });
         }
 
-        // Validar formato
         const validFormats = ['mp3', 'aac', 'ogg', 'wav'];
         if (!validFormats.includes(format)) {
             return res.status(400).json({
@@ -515,7 +488,7 @@ app.get('/api/download/audio', async (req, res) => {
     }
 });
 
-// Nueva ruta para convertir video existente a audio
+// Ruta para convertir video a audio
 app.post('/api/convert/audio', async (req, res) => {
     try {
         const { filename, format = 'mp3', quality = '192' } = req.body;
@@ -535,7 +508,6 @@ app.post('/api/convert/audio', async (req, res) => {
             });
         }
 
-        // Validar formato
         const validFormats = ['mp3', 'aac', 'ogg', 'wav'];
         if (!validFormats.includes(format)) {
             return res.status(400).json({
@@ -555,7 +527,7 @@ app.post('/api/convert/audio', async (req, res) => {
                     format: audioResult.format,
                     quality: audioResult.quality,
                     url: audioResult.url,
-                    downloadUrl: `http://skyapi-production-e3e0.up.railway.app${audioResult.url}`
+                    downloadUrl: `https://skyapi-production-e3e0.up.railway.app${audioResult.url}`
                 }
             }
         });
@@ -568,7 +540,7 @@ app.post('/api/convert/audio', async (req, res) => {
     }
 });
 
-// Ruta para listar videos descargados
+// Ruta para listar videos
 app.get('/api/downloads', (req, res) => {
     try {
         const files = fs.readdirSync(downloadsDir);
@@ -600,7 +572,7 @@ app.get('/api/downloads', (req, res) => {
     }
 });
 
-// Nueva ruta para listar audios convertidos
+// Ruta para listar audios
 app.get('/api/audio', (req, res) => {
     try {
         const files = fs.readdirSync(audioDir);
@@ -633,7 +605,7 @@ app.get('/api/audio', (req, res) => {
     }
 });
 
-// Ruta para eliminar un video específico
+// Rutas para eliminar archivos
 app.delete('/api/downloads/:filename', (req, res) => {
     try {
         const { filename } = req.params;
@@ -660,7 +632,6 @@ app.delete('/api/downloads/:filename', (req, res) => {
     }
 });
 
-// Nueva ruta para eliminar un audio específico
 app.delete('/api/audio/:filename', (req, res) => {
     try {
         const { filename } = req.params;
@@ -696,19 +667,20 @@ app.get('/health', (req, res) => {
             info: '/api/info?url=VIDEO_URL',
             downloadVideo: '/api/download/video?url=VIDEO_URL',
             downloadAudio: '/api/download/audio?url=VIDEO_URL&format=mp3&quality=192',
-            convertAudio: '/api/convert/audio (POST) - Convert existing video to audio',
+            convertAudio: '/api/convert/audio (POST)',
             listVideos: '/api/downloads',
             listAudios: '/api/audio',
-            deleteVideo: '/api/downloads/FILENAME (DELETE method)',
-            deleteAudio: '/api/audio/FILENAME (DELETE method)'
+            deleteVideo: '/api/downloads/FILENAME (DELETE)',
+            deleteAudio: '/api/audio/FILENAME (DELETE)'
         },
         supportedAudioFormats: ['mp3', 'aac', 'ogg', 'wav'],
-        audioQualities: {
-            mp3: '64k, 128k, 192k, 256k, 320k',
-            aac: '64k, 128k, 192k, 256k',
-            ogg: 'Quality levels 0-10 (converted from bitrate)',
-            wav: 'Lossless'
-        }
+        fixes: [
+            'Removed problematic po_token configuration',
+            'Simplified authentication approach',
+            'Added fallback methods for downloads',
+            'Updated user agent to latest Chrome version',
+            'Improved error handling with retry logic'
+        ]
     });
 });
 
@@ -724,14 +696,7 @@ app.use((err, req, res, next) => {
 // Inicializar servidor
 app.listen(PORT, () => {
     console.log(`🚀 API YouTube Video Download ejecutándose en puerto ${PORT}`);
-    console.log(`📊 Salud: http://skyapi-production-e3e0.up.railway.app/health`);
-    console.log(`📹 Descargar video: http://skyapi-production-e3e0.up.railway.app/api/download/video?url=https://youtube.com/watch?v=dQw4w9WgXcQ`);
-    console.log(`🎵 Descargar audio: http://skyapi-production-e3e0.up.railway.app/api/download/audio?url=https://youtube.com/watch?v=dQw4w9WgXcQ&format=mp3&quality=192`);
-    console.log(`🔄 Convertir a audio: POST http://skyapi-production-e3e0.up.railway.app/api/convert/audio`);
-    console.log(`📂 Listar videos: http://skyapi-production-e3e0.up.railway.app/api/downloads`);
-    console.log(`🎶 Listar audios: http://skyapi-production-e3e0.up.railway.app/api/audio`);
-    console.log(`🎥 Videos servidos en: http://skyapi-production-e3e0.up.railway.app/videos/`);
-    console.log(`🔊 Audios servidos en: http://skyapi-production-e3e0.up.railway.app/audio/`);
+    console.log(`📊 Salud: https://skyapi-production-e3e0.up.railway.app/health`);
 });
 
 export default app;
