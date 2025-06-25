@@ -42,18 +42,18 @@ function generateCookiesFile() {
     const netscapeCookies = [
         '# Netscape HTTP Cookie File',
         '# http://curl.haxx.se/rfc/cookie_spec.html',
-        '# This is a generated file! Do not edit.',
+        '# This is a generated file!  Do not edit.',
         '.youtube.com\tTRUE\t/\tTRUE\t1775939339\t__Secure-1PSIDTS\tsidts-CjIB7pHpteU8svvP7SINYgQI7auRSlFiz53gkoICGLnRp55N20CdgsgnQHnEQ7iFnBBIxBAA',
         '.youtube.com\tTRUE\t/\tTRUE\t1775939339\t__Secure-3PSIDTS\tsidts-CjIB7pHpteU8svvP7SINYgQI7auRSlFiz53gkoICGLnRp55N20CdgsgnQHnEQ7iFnBBIxBAA',
         '.youtube.com\tTRUE\t/\tTRUE\t1784957601\t__Secure-3PAPISID\thrUFkzqIw_zF9izw/A66_39yGeLLjUGAXN',
         '.youtube.com\tTRUE\t/\tTRUE\t1776018736\t__Secure-3PSIDCC\tAKEyXzW7YaEfmRjqhIl2Lbut8Nl_d0CFSWQ4zmSE67S95L4P9wvHLQcDt9bLdbZIojNVoeW7',
-        '.youtube.com\tTRUE\t/\tTRUE\t1750399401\tGPS\t1',
         '.youtube.com\tTRUE\t/\tTRUE\t1784957601\t__Secure-3PSID\tg.a000yQhzMHhDmgBxOJmcfhmuvCmOLsZ6bgr988YiVv4MqUmcEert_5vEi8Doy6EXNAJnczCIIAACgYKAdESARQSFQHGX2Mi5MA_rTbNKbhKYf-okGxuVBoVAUF8yKpO_ZS0r9UiQ_EdI9TFXMyU0076',
-        '.youtube.com\tTRUE\t/\tTRUE\t1784957606\tPREF\tf6=40000000&tz=America.Mexico_City',
-        '.youtube.com\tTRUE\t/\tTRUE\t0\tYSC\tLkMOx4oA4sY',
-        '.youtube.com\tTRUE\t/\tTRUE\t1765949607\tVISITOR_INFO1_LIVE\tde-HbH90xzI',
-        '.youtube.com\tTRUE\t/\tTRUE\t1765949607\tVISITOR_PRIVACY_METADATA\tCgJNWBIEGgAgag%3D%3D',
-        '.youtube.com\tTRUE\t/\tTRUE\t1765949604\t__Secure-ROLLOUT_TOKEN\tCLTssqW864iVtAEQgP-vmqP_jQMYhOzPm6P_jQM%3D'
+        '.youtube.com\tTRUE\t/\tTRUE\t1785375272\tPREF\tf6=40000000&tz=America.Mexico_City',
+        '.youtube.com\tTRUE\t/\tTRUE\t1750817067\tGPS\t1',
+        '.youtube.com\tTRUE\t/\tTRUE\t1766367276\tVISITOR_INFO1_LIVE\tde-HbH90xzI',
+        '.youtube.com\tTRUE\t/\tTRUE\t1766367276\tVISITOR_PRIVACY_METADATA\tCgJNWBIEGgAgag%3D%3D',
+        '.youtube.com\tTRUE\t/\tTRUE\t0\tYSC\tfIfFa_ifKL0',
+        '.youtube.com\tTRUE\t/\tTRUE\t1766367267\t__Secure-ROLLOUT_TOKEN\tCLTssqW864iVtAEQgP-vmqP_jQMY0MrJkLeLjgM%3D'
     ];
 
     try {
