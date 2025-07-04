@@ -392,7 +392,7 @@ async function processYouTubeVideo(videoUrl, downloadVideo = false, downloadAudi
                     filename: downloadResult.filename,
                     size: downloadResult.size,
                     url: downloadResult.url,
-                    downloadUrl: `https://skyapi-production-e3e0.up.railway.app${downloadResult.url}`
+                    downloadUrl: `https://3.148.245.238:3000${downloadResult.url}`
                 };
             }
 
@@ -405,7 +405,7 @@ async function processYouTubeVideo(videoUrl, downloadVideo = false, downloadAudi
                     format: audioResult.format,
                     quality: audioResult.quality,
                     url: audioResult.url,
-                    downloadUrl: `http://skyapi-production-e3e0.up.railway.app${audioResult.url}`
+                    downloadUrl: `http://3.148.245.238:3000${audioResult.url}`
                 };
             }
 
@@ -555,7 +555,7 @@ app.post('/api/convert/audio', async (req, res) => {
                     format: audioResult.format,
                     quality: audioResult.quality,
                     url: audioResult.url,
-                    downloadUrl: `http://skyapi-production-e3e0.up.railway.app${audioResult.url}`
+                    downloadUrl: `http://3.148.245.238:3000${audioResult.url}`
                 }
             }
         });
@@ -581,7 +581,7 @@ app.get('/api/downloads', (req, res) => {
                 size: stats.size,
                 created: stats.birthtime,
                 url: `/videos/${file}`,
-                downloadUrl: `https://skyapi-production-e3e0.up.railway.app/videos/${file}`
+                downloadUrl: `https://3.148.245.238:3000/videos/${file}`
             };
         }).sort((a, b) => new Date(b.created) - new Date(a.created));
 
@@ -614,7 +614,7 @@ app.get('/api/audio', (req, res) => {
                 created: stats.birthtime,
                 format: path.extname(file).substring(1),
                 url: `/audio/${file}`,
-                downloadUrl: `https://skyapi-production-e3e0.up.railway.app/audio/${file}`
+                downloadUrl: `https://3.148.245.238:3000/audio/${file}`
             };
         }).sort((a, b) => new Date(b.created) - new Date(a.created));
 
@@ -722,16 +722,18 @@ app.use((err, req, res, next) => {
 });
 
 // Inicializar servidor
-app.listen(PORT, () => {
-    console.log(`🚀 API YouTube Video Download ejecutándose en puerto ${PORT}`);
-    console.log(`📊 Salud: http://skyapi-production-e3e0.up.railway.app/health`);
-    console.log(`📹 Descargar video: http://skyapi-production-e3e0.up.railway.app/api/download/video?url=https://youtube.com/watch?v=dQw4w9WgXcQ`);
-    console.log(`🎵 Descargar audio: http://skyapi-production-e3e0.up.railway.app/api/download/audio?url=https://youtube.com/watch?v=dQw4w9WgXcQ&format=mp3&quality=192`);
-    console.log(`🔄 Convertir a audio: POST http://skyapi-production-e3e0.up.railway.app/api/convert/audio`);
-    console.log(`📂 Listar videos: http://skyapi-production-e3e0.up.railway.app/api/downloads`);
-    console.log(`🎶 Listar audios: http://skyapi-production-e3e0.up.railway.app/api/audio`);
-    console.log(`🎥 Videos servidos en: http://skyapi-production-e3e0.up.railway.app/videos/`);
-    console.log(`🔊 Audios servidos en: http://skyapi-production-e3e0.up.railway.app/audio/`);
-});
+const HOST = '0.0.0.0'; // Agregar esta línea ANTES de app.listen
 
+app.listen(PORT, HOST, () => {  // Agregar HOST aquí
+    console.log(`🚀 API YouTube Video Download ejecutándose en puerto ${PORT}`);
+    console.log(`🌐 Accesible desde: http://TU_IP_VPS:${PORT}`);
+    console.log(`📊 Salud: http://TU_IP_VPS:${PORT}/health`);
+    console.log(`📹 Descargar video: http://TU_IP_VPS:${PORT}/api/download/video?url=https://youtube.com/watch?v=dQw4w9WgXcQ`);
+    console.log(`🎵 Descargar audio: http://TU_IP_VPS:${PORT}/api/download/audio?url=https://youtube.com/watch?v=dQw4w9WgXcQ&format=mp3&quality=192`);
+    console.log(`🔄 Convertir a audio: POST http://TU_IP_VPS:${PORT}/api/convert/audio`);
+    console.log(`📂 Listar videos: http://TU_IP_VPS:${PORT}/api/downloads`);
+    console.log(`🎶 Listar audios: http://TU_IP_VPS:${PORT}/api/audio`);
+    console.log(`🎥 Videos servidos en: http://TU_IP_VPS:${PORT}/videos/`);
+    console.log(`🔊 Audios servidos en: http://TU_IP_VPS:${PORT}/audio/`);
+});
 export default app;
