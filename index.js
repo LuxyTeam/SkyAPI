@@ -626,7 +626,7 @@ app.get('/api/audio', (req, res) => {
                 created: stats.birthtime,
                 format: path.extname(file).substring(1),
                 url: `/audio/${file}`,
-                downloadUrl: `https://3.148.245.238:3000/audio/${file}`
+                downloadUrl: `http://3.148.245.238:3000/audio/${file}`
             };
         }).sort((a, b) => new Date(b.created) - new Date(a.created));
 
