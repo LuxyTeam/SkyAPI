@@ -404,7 +404,7 @@ async function processYouTubeVideo(videoUrl, downloadVideo = false, downloadAudi
                     filename: downloadResult.filename,
                     size: downloadResult.size,
                     url: downloadResult.url,
-                    downloadUrl: `https://3.148.245.238:3000${downloadResult.url}`
+                    downloadUrl: `http://3.148.245.238:3000${downloadResult.url}`
                 };
             }
 
@@ -593,7 +593,7 @@ app.get('/api/downloads', (req, res) => {
                 size: stats.size,
                 created: stats.birthtime,
                 url: `/videos/${file}`,
-                downloadUrl: `https://3.148.245.238:3000/videos/${file}`
+                downloadUrl: `http://3.148.245.238:3000/videos/${file}`
             };
         }).sort((a, b) => new Date(b.created) - new Date(a.created));
 
