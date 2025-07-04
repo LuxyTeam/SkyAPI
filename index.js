@@ -37,7 +37,7 @@ function ensureDirectories() {
 
 function generateCookiesFile() {
     // Ruta donde guardaste las cookies exportadas desde el navegador
-    const realCookiesPath = path.join(__dirname, 'cookies', 'cookies.txt');
+    const realCookiesPath = path.join(__dirname, 'cookies', 'youtube_cookies.txt');
     if (!fs.existsSync(realCookiesPath)) {
         throw new Error('Archivo de cookies reales no encontrado. Exporta cookies válidas y colócalas en /cookies/youtube_cookies.txt');
     }
