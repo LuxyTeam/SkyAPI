@@ -30,14 +30,14 @@ function ensureDirectories() {
     [binDir, tmpDir, downloadsDir, audioDir].forEach(dir => {
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
-            console.log(Directorio creado: ${dir});
+            console.log(`Directorio creado: ${dir}`);
         }
     });
 }
 
 function generateCookiesFile() {
     const now = Date.now();
-    const cookiesPath = path.join(tmpDir, ${now}_cookies.txt);
+    const cookiesPath = path.join(tmpDir, `${now}_cookies.txt`);
 
     const netscapeCookies = [
         '# Netscape HTTP Cookie File',
@@ -72,7 +72,7 @@ function generateCookiesFile() {
         fs.writeFileSync(cookiesPath, netscapeCookies.join('\n'));
         return cookiesPath;
     } catch (error) {
-        throw new Error(Error al crear archivo de cookies: ${error.message});
+        throw new Error(`Error al crear archivo de cookies: ${error.message}`);
     }
 }
 
@@ -81,8 +81,8 @@ function downloadYtDlp() {
         console.log('Descargando yt-dlp...');
 
         const commands = [
-            curl -L -o "${ytDlpPath}" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp,
-            wget -O "${ytDlpPath}" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
+            `curl -L -o "${ytDlpPath}" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp`,
+            `wget -O "${ytDlpPath}" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp`
         ];
 
         const tryDownload = (commandIndex = 0) => {
@@ -92,21 +92,21 @@ function downloadYtDlp() {
             }
 
             const command = commands[commandIndex];
-            console.log(Intentando método ${commandIndex + 1}: ${command.split(' ')[0]});
+            console.log(`Intentando método ${commandIndex + 1}: ${command.split(' ')[0]}`);
 
             exec(command, (error, stdout, stderr) => {
                 if (error) {
-                    console.warn(Método ${commandIndex + 1} falló:, error.message);
+                    console.warn(`Método ${commandIndex + 1} falló:`, error.message);
                     tryDownload(commandIndex + 1);
                     return;
                 }
 
                 if (stderr) {
-                    console.warn(Advertencia: ${stderr});
+                    console.warn(`Advertencia: ${stderr}`);
                 }
 
                 if (!fs.existsSync(ytDlpPath)) {
-                    console.warn(Archivo no encontrado después de descarga);
+                    console.warn(`Archivo no encontrado después de descarga`);
                     tryDownload(commandIndex + 1);
                     return;
                 }
@@ -139,11 +139,11 @@ function sanitizeFilename(filename) {
 // Función para obtener información del video
 async function getVideoInfo(videoUrl, cookiesPath) {
     return new Promise((resolve, reject) => {
-        const command = "${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --dump-json "${videoUrl}";
+        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --dump-json "${videoUrl}"`;
 
         exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
             if (error) {
-                reject(new Error(Error obteniendo información del video: ${error.message}));
+                reject(new Error(`Error obteniendo información del video: ${error.message}`));
                 return;
             }
 
@@ -156,7 +156,7 @@ async function getVideoInfo(videoUrl, cookiesPath) {
                 resolve({
                     title: videoInfo.title || 'Sin título',
                     duration: videoInfo.duration || 0,
-                    resolution: videoInfo.resolution || videoInfo.height ? ${videoInfo.height}p : 'N/A',
+                    resolution: videoInfo.resolution || videoInfo.height ? `${videoInfo.height}p` : 'N/A',
                     thumbnail: videoInfo.thumbnail || null,
                     uploader: videoInfo.uploader || null,
                     uploadDate: videoInfo.upload_date || null,
@@ -165,7 +165,7 @@ async function getVideoInfo(videoUrl, cookiesPath) {
                     id: videoInfo.id || null
                 });
             } catch (e) {
-                reject(new Error(Error analizando datos del video: ${e.message}));
+                reject(new Error(`Error analizando datos del video: ${e.message}`));
             }
         });
     });
@@ -175,17 +175,17 @@ async function getVideoInfo(videoUrl, cookiesPath) {
 async function downloadVideoToLocal(videoUrl, cookiesPath, videoInfo) {
     return new Promise((resolve, reject) => {
         const safeTitle = sanitizeFilename(videoInfo.title);
-        const filename = ${safeTitle}_${videoInfo.id || Date.now()}.%(ext)s;
+        const filename = `${safeTitle}_${videoInfo.id || Date.now()}.%(ext)s`;
         const outputPath = path.join(downloadsDir, filename);
 
         // Comando para descargar el video en la mejor calidad MP4 disponible
-        const command = "${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --format "best[ext=mp4]/best" --output "${outputPath}" "${videoUrl}";
+        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --format "best[ext=mp4]/best" --output "${outputPath}" "${videoUrl}"`;
 
-        console.log(Iniciando descarga: ${videoInfo.title});
+        console.log(`Iniciando descarga: ${videoInfo.title}`);
 
         exec(command, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
             if (error) {
-                reject(new Error(Error descargando video: ${error.message}));
+                reject(new Error(`Error descargando video: ${error.message}`));
                 return;
             }
 
@@ -209,16 +209,16 @@ async function downloadVideoToLocal(videoUrl, cookiesPath, videoInfo) {
                 const filePath = path.join(downloadsDir, downloadedFile);
                 const stats = fs.statSync(filePath);
 
-                console.log(Video descargado exitosamente: ${downloadedFile});
+                console.log(`Video descargado exitosamente: ${downloadedFile}`);
 
                 resolve({
                     filename: downloadedFile,
                     path: filePath,
                     size: stats.size,
-                    url: /videos/${downloadedFile}
+                    url: `/videos/${downloadedFile}`
                 });
             } catch (e) {
-                reject(new Error(Error verificando descarga: ${e.message}));
+                reject(new Error(`Error verificando descarga: ${e.message}`));
             }
         });
     });
@@ -228,17 +228,17 @@ async function downloadVideoToLocal(videoUrl, cookiesPath, videoInfo) {
 async function downloadAudioToLocal(videoUrl, cookiesPath, videoInfo, format = 'mp3', quality = '192') {
     return new Promise((resolve, reject) => {
         const safeTitle = sanitizeFilename(videoInfo.title);
-        const filename = ${safeTitle}_${videoInfo.id || Date.now()}.${format};
+        const filename = `${safeTitle}_${videoInfo.id || Date.now()}.${format}`;
         const outputPath = path.join(audioDir, filename);
 
         // Comando para descargar directamente como audio con yt-dlp y ffmpeg
-        const command = "${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --extract-audio --audio-format ${format} --audio-quality ${quality} --output "${outputPath}" "${videoUrl}";
+        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --extract-audio --audio-format ${format} --audio-quality ${quality} --output "${outputPath}" "${videoUrl}"`;
 
-        console.log(Iniciando descarga de audio: ${videoInfo.title});
+        console.log(`Iniciando descarga de audio: ${videoInfo.title}`);
 
         exec(command, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
             if (error) {
-                reject(new Error(Error descargando audio: ${error.message}));
+                reject(new Error(`Error descargando audio: ${error.message}`));
                 return;
             }
 
@@ -254,7 +254,7 @@ async function downloadAudioToLocal(videoUrl, cookiesPath, videoInfo, format = '
                 }
 
                 const stats = fs.statSync(outputPath);
-                console.log(Audio descargado exitosamente: ${filename});
+                console.log(`Audio descargado exitosamente: ${filename}`);
 
                 resolve({
                     filename: filename,
@@ -262,10 +262,10 @@ async function downloadAudioToLocal(videoUrl, cookiesPath, videoInfo, format = '
                     size: stats.size,
                     format: format,
                     quality: quality,
-                    url: /audio/${filename}
+                    url: `/audio/${filename}`
                 });
             } catch (e) {
-                reject(new Error(Error verificando descarga de audio: ${e.message}));
+                reject(new Error(`Error verificando descarga de audio: ${e.message}`));
             }
         });
     });
@@ -275,28 +275,28 @@ async function downloadAudioToLocal(videoUrl, cookiesPath, videoInfo, format = '
 async function convertVideoToAudio(videoPath, format = 'mp3', quality = '192') {
     return new Promise((resolve, reject) => {
         const videoName = path.basename(videoPath, path.extname(videoPath));
-        const audioFilename = ${videoName}.${format};
+        const audioFilename = `${videoName}.${format}`;
         const audioPath = path.join(audioDir, audioFilename);
 
         // Configurar calidad según el formato
         let qualityParam;
         if (format === 'mp3') {
-            qualityParam = -b:a ${quality}k;
+            qualityParam = `-b:a ${quality}k`;
         } else if (format === 'aac') {
-            qualityParam = -b:a ${quality}k;
+            qualityParam = `-b:a ${quality}k`;
         } else if (format === 'ogg') {
-            qualityParam = -q:a ${Math.ceil(parseInt(quality) / 32)};
+            qualityParam = `-q:a ${Math.ceil(parseInt(quality) / 32)}`;
         } else {
-            qualityParam = -b:a ${quality}k;
+            qualityParam = `-b:a ${quality}k`;
         }
 
-        const command = ffmpeg -i "${videoPath}" -vn -acodec ${format === 'mp3' ? 'libmp3lame' : format === 'aac' ? 'aac' : 'libvorbis'} ${qualityParam} "${audioPath}" -y;
+        const command = `ffmpeg -i "${videoPath}" -vn -acodec ${format === 'mp3' ? 'libmp3lame' : format === 'aac' ? 'aac' : 'libvorbis'} ${qualityParam} "${audioPath}" -y`;
 
-        console.log(Convirtiendo video a audio: ${audioFilename});
+        console.log(`Convirtiendo video a audio: ${audioFilename}`);
 
         exec(command, { maxBuffer: 1024 * 1024 * 50 }, (error, stdout, stderr) => {
             if (error) {
-                reject(new Error(Error convirtiendo a audio: ${error.message}));
+                reject(new Error(`Error convirtiendo a audio: ${error.message}`));
                 return;
             }
 
@@ -311,7 +311,7 @@ async function convertVideoToAudio(videoPath, format = 'mp3', quality = '192') {
                 }
 
                 const stats = fs.statSync(audioPath);
-                console.log(Audio convertido exitosamente: ${audioFilename});
+                console.log(`Audio convertido exitosamente: ${audioFilename}`);
 
                 resolve({
                     filename: audioFilename,
@@ -319,10 +319,10 @@ async function convertVideoToAudio(videoPath, format = 'mp3', quality = '192') {
                     size: stats.size,
                     format: format,
                     quality: quality,
-                    url: /audio/${audioFilename}
+                    url: `/audio/${audioFilename}`
                 });
             } catch (e) {
-                reject(new Error(Error verificando conversión: ${e.message}));
+                reject(new Error(`Error verificando conversión: ${e.message}`));
             }
         });
     });
@@ -404,7 +404,7 @@ async function processYouTubeVideo(videoUrl, downloadVideo = false, downloadAudi
                     filename: downloadResult.filename,
                     size: downloadResult.size,
                     url: downloadResult.url,
-                    downloadUrl: https://3.148.245.238:3000${downloadResult.url}
+                    downloadUrl: `https://3.148.245.238:3000${downloadResult.url}`
                 };
             }
 
@@ -417,7 +417,7 @@ async function processYouTubeVideo(videoUrl, downloadVideo = false, downloadAudi
                     format: audioResult.format,
                     quality: audioResult.quality,
                     url: audioResult.url,
-                    downloadUrl: http://3.148.245.238:3000${audioResult.url}
+                    downloadUrl: `http://3.148.245.238:3000${audioResult.url}`
                 };
             }
 
@@ -508,7 +508,7 @@ app.get('/api/download/audio', async (req, res) => {
         const validFormats = ['mp3', 'aac', 'ogg', 'wav'];
         if (!validFormats.includes(format)) {
             return res.status(400).json({
-                error: Formato no válido. Formatos soportados: ${validFormats.join(', ')}
+                error: `Formato no válido. Formatos soportados: ${validFormats.join(', ')}`
             });
         }
 
@@ -551,7 +551,7 @@ app.post('/api/convert/audio', async (req, res) => {
         const validFormats = ['mp3', 'aac', 'ogg', 'wav'];
         if (!validFormats.includes(format)) {
             return res.status(400).json({
-                error: Formato no válido. Formatos soportados: ${validFormats.join(', ')}
+                error: `Formato no válido. Formatos soportados: ${validFormats.join(', ')}`
             });
         }
 
@@ -567,7 +567,7 @@ app.post('/api/convert/audio', async (req, res) => {
                     format: audioResult.format,
                     quality: audioResult.quality,
                     url: audioResult.url,
-                    downloadUrl: http://3.148.245.238:3000${audioResult.url}
+                    downloadUrl: `http://3.148.245.238:3000${audioResult.url}`
                 }
             }
         });
@@ -592,8 +592,8 @@ app.get('/api/downloads', (req, res) => {
                 filename: file,
                 size: stats.size,
                 created: stats.birthtime,
-                url: /videos/${file},
-                downloadUrl: https://3.148.245.238:3000/videos/${file}
+                url: `/videos/${file}`,
+                downloadUrl: `https://3.148.245.238:3000/videos/${file}`
             };
         }).sort((a, b) => new Date(b.created) - new Date(a.created));
 
@@ -625,8 +625,8 @@ app.get('/api/audio', (req, res) => {
                 size: stats.size,
                 created: stats.birthtime,
                 format: path.extname(file).substring(1),
-                url: /audio/${file},
-                downloadUrl: https://3.148.245.238:3000/audio/${file}
+                url: `/audio/${file}`,
+                downloadUrl: `https://3.148.245.238:3000/audio/${file}`
             };
         }).sort((a, b) => new Date(b.created) - new Date(a.created));
 
@@ -662,7 +662,7 @@ app.delete('/api/downloads/:filename', (req, res) => {
 
         res.json({
             success: true,
-            message: Archivo ${filename} eliminado correctamente
+            message: `Archivo ${filename} eliminado correctamente`
         });
     } catch (error) {
         res.status(500).json({
@@ -689,7 +689,7 @@ app.delete('/api/audio/:filename', (req, res) => {
 
         res.json({
             success: true,
-            message: Archivo de audio ${filename} eliminado correctamente
+            message: `Archivo de audio ${filename} eliminado correctamente`
         });
     } catch (error) {
         res.status(500).json({
@@ -737,15 +737,16 @@ app.use((err, req, res, next) => {
 const HOST = '0.0.0.0'; // Agregar esta línea ANTES de app.listen
 
 app.listen(PORT, HOST, () => {  // Agregar HOST aquí
-    console.log(🚀 API YouTube Video Download ejecutándose en puerto ${PORT});
-    console.log(🌐 Accesible desde: http://TU_IP_VPS:${PORT});
-    console.log(📊 Salud: http://TU_IP_VPS:${PORT}/health);
-    console.log(📹 Descargar video: http://TU_IP_VPS:${PORT}/api/download/video?url=https://youtube.com/watch?v=dQw4w9WgXcQ);
-    console.log(🎵 Descargar audio: http://TU_IP_VPS:${PORT}/api/download/audio?url=https://youtube.com/watch?v=dQw4w9WgXcQ&format=mp3&quality=192);
-    console.log(🔄 Convertir a audio: POST http://TU_IP_VPS:${PORT}/api/convert/audio);
-    console.log(📂 Listar videos: http://TU_IP_VPS:${PORT}/api/downloads);
-    console.log(🎶 Listar audios: http://TU_IP_VPS:${PORT}/api/audio);
-    console.log(🎥 Videos servidos en: http://TU_IP_VPS:${PORT}/videos/);
-    console.log(🔊 Audios servidos en: http://TU_IP_VPS:${PORT}/audio/);
+    console.log(`🚀 API YouTube Video Download ejecutándose en puerto ${PORT}`);
+    console.log(`🌐 Accesible desde: http://TU_IP_VPS:${PORT}`);
+    console.log(`📊 Salud: http://TU_IP_VPS:${PORT}/health`);
+    console.log(`📹 Descargar video: http://TU_IP_VPS:${PORT}/api/download/video?url=https://youtube.com/watch?v=dQw4w9WgXcQ`);
+    console.log(`🎵 Descargar audio: http://TU_IP_VPS:${PORT}/api/download/audio?url=https://youtube.com/watch?v=dQw4w9WgXcQ&format=mp3&quality=192`);
+    console.log(`🔄 Convertir a audio: POST http://TU_IP_VPS:${PORT}/api/convert/audio`);
+    console.log(`📂 Listar videos: http://TU_IP_VPS:${PORT}/api/downloads`);
+    console.log(`🎶 Listar audios: http://TU_IP_VPS:${PORT}/api/audio`);
+    console.log(`🎥 Videos servidos en: http://TU_IP_VPS:${PORT}/videos/`);
+    console.log(`🔊 Audios servidos en: http://TU_IP_VPS:${PORT}/audio/`);
 });
 export default app;
+
