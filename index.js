@@ -48,12 +48,12 @@ function generateCookiesFile() {
         '.youtube.com\tTRUE\t/\tTRUE\t1784957601\t__Secure-3PAPISID\thrUFkzqIw_zF9izw/A66_39yGeLLjUGAXN',
         '.youtube.com\tTRUE\t/\tTRUE\t1776018736\t__Secure-3PSIDCC\tAKEyXzW7YaEfmRjqhIl2Lbut8Nl_d0CFSWQ4zmSE67S95L4P9wvHLQcDt9bLdbZIojNVoeW7',
         '.youtube.com\tTRUE\t/\tTRUE\t1784957601\t__Secure-3PSID\tg.a000yQhzMHhDmgBxOJmcfhmuvCmOLsZ6bgr988YiVv4MqUmcEert_5vEi8Doy6EXNAJnczCIIAACgYKAdESARQSFQHGX2Mi5MA_rTbNKbhKYf-okGxuVBoVAUF8yKpO_ZS0r9UiQ_EdI9TFXMyU0076',
-        '.youtube.com\tTRUE\t/\tTRUE\t1785375272\tPREF\tf6=40000000&tz=America.Mexico_City',
-        '.youtube.com\tTRUE\t/\tTRUE\t1750817067\tGPS\t1',
-        '.youtube.com\tTRUE\t/\tTRUE\t1766367276\tVISITOR_INFO1_LIVE\tde-HbH90xzI',
-        '.youtube.com\tTRUE\t/\tTRUE\t1766367276\tVISITOR_PRIVACY_METADATA\tCgJNWBIEGgAgag%3D%3D',
-        '.youtube.com\tTRUE\t/\tTRUE\t0\tYSC\tfIfFa_ifKL0',
-        '.youtube.com\tTRUE\t/\tTRUE\t1766367267\t__Secure-ROLLOUT_TOKEN\tCLTssqW864iVtAEQgP-vmqP_jQMY0MrJkLeLjgM%3D'
+        '.youtube.com\tTRUE\t/\tTRUE\t1786185209\tPREF\tf6=40000000&tz=America.Mexico_City&f7=100',
+        '.youtube.com\tTRUE\t/\tTRUE\t1751627005\tGPS\t1',
+        '.youtube.com\tTRUE\t/\tTRUE\t1767177207\tVISITOR_INFO1_LIVE\tde-HbH90xzI',
+        '.youtube.com\tTRUE\t/\tTRUE\t1767177207\tVISITOR_PRIVACY_METADATA\tCgJNWBIEGgAgag%3D%3D',
+        '.youtube.com\tTRUE\t/\tTRUE\t0\tYSC\tVbDrIEdf7x8',
+        '.youtube.com\tTRUE\t/\tTRUE\t1767177205\t__Secure-ROLLOUT_TOKEN\tCLTssqW864iVtAEQgP-vmqP_jQMYmfrlsICjjgM%3D'
     ];
 
     try {
@@ -127,7 +127,7 @@ function sanitizeFilename(filename) {
 // Función para obtener información del video
 async function getVideoInfo(videoUrl, cookiesPath) {
     return new Promise((resolve, reject) => {
-        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --dump-json "${videoUrl}"`;
+        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "/home/ubuntu/SkyAPI/tmp/cookies_youtube.txt" --dump-json "${videoUrl}"`;
 
         exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
             if (error) {
@@ -167,7 +167,7 @@ async function downloadVideoToLocal(videoUrl, cookiesPath, videoInfo) {
         const outputPath = path.join(downloadsDir, filename);
 
         // Comando para descargar el video en la mejor calidad MP4 disponible
-        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --format "best[ext=mp4]/best" --output "${outputPath}" "${videoUrl}"`;
+const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --format "best[ext=mp4]/best" --output "${outputPath}" "${videoUrl}"`;
 
         console.log(`Iniciando descarga: ${videoInfo.title}`);
 
@@ -220,7 +220,7 @@ async function downloadAudioToLocal(videoUrl, cookiesPath, videoInfo, format = '
         const outputPath = path.join(audioDir, filename);
 
         // Comando para descargar directamente como audio con yt-dlp y ffmpeg
-        const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extractor-args "youtube:po_token=MlIA-K3hKvNzAQDDEqKnJ20fjHLnTPKXlzRBO0fMmYY2wAA8D2kU-OhmZpWEX4GahXMUaX0E3thjodkX84alMkci1107MFF913sP2_WkOY0a44Dp" --extract-audio --audio-format ${format} --audio-quality ${quality} --output "${outputPath}" "${videoUrl}"`;
+const command = `"${ytDlpPath}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" --referer "https://www.youtube.com/" --cookies "${cookiesPath}" --extract-audio --audio-format ${format} --audio-quality ${quality} --output "${outputPath}" "${videoUrl}"`;
 
         console.log(`Iniciando descarga de audio: ${videoInfo.title}`);
 
