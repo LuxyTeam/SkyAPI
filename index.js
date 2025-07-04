@@ -36,32 +36,12 @@ function ensureDirectories() {
 }
 
 function generateCookiesFile() {
-    const now = Date.now();
-    const cookiesPath = path.join(tmpDir, `${now}_cookies.txt`);
-
-    const netscapeCookies = [
-        '# Netscape HTTP Cookie File',
-        '# http://curl.haxx.se/rfc/cookie_spec.html',
-        '# This is a generated file!  Do not edit.',
-        '.youtube.com\tTRUE\t/\tTRUE\t1775939339\t__Secure-1PSIDTS\tsidts-CjIB7pHpteU8svvP7SINYgQI7auRSlFiz53gkoICGLnRp55N20CdgsgnQHnEQ7iFnBBIxBAA',
-        '.youtube.com\tTRUE\t/\tTRUE\t1775939339\t__Secure-3PSIDTS\tsidts-CjIB7pHpteU8svvP7SINYgQI7auRSlFiz53gkoICGLnRp55N20CdgsgnQHnEQ7iFnBBIxBAA',
-        '.youtube.com\tTRUE\t/\tTRUE\t1784957601\t__Secure-3PAPISID\thrUFkzqIw_zF9izw/A66_39yGeLLjUGAXN',
-        '.youtube.com\tTRUE\t/\tTRUE\t1776018736\t__Secure-3PSIDCC\tAKEyXzW7YaEfmRjqhIl2Lbut8Nl_d0CFSWQ4zmSE67S95L4P9wvHLQcDt9bLdbZIojNVoeW7',
-        '.youtube.com\tTRUE\t/\tTRUE\t1784957601\t__Secure-3PSID\tg.a000yQhzMHhDmgBxOJmcfhmuvCmOLsZ6bgr988YiVv4MqUmcEert_5vEi8Doy6EXNAJnczCIIAACgYKAdESARQSFQHGX2Mi5MA_rTbNKbhKYf-okGxuVBoVAUF8yKpO_ZS0r9UiQ_EdI9TFXMyU0076',
-        '.youtube.com\tTRUE\t/\tTRUE\t1786185209\tPREF\tf6=40000000&tz=America.Mexico_City&f7=100',
-        '.youtube.com\tTRUE\t/\tTRUE\t1751627005\tGPS\t1',
-        '.youtube.com\tTRUE\t/\tTRUE\t1767177207\tVISITOR_INFO1_LIVE\tde-HbH90xzI',
-        '.youtube.com\tTRUE\t/\tTRUE\t1767177207\tVISITOR_PRIVACY_METADATA\tCgJNWBIEGgAgag%3D%3D',
-        '.youtube.com\tTRUE\t/\tTRUE\t0\tYSC\tVbDrIEdf7x8',
-        '.youtube.com\tTRUE\t/\tTRUE\t1767177205\t__Secure-ROLLOUT_TOKEN\tCLTssqW864iVtAEQgP-vmqP_jQMYmfrlsICjjgM%3D'
-    ];
-
-    try {
-        fs.writeFileSync(cookiesPath, netscapeCookies.join('\n'));
-        return cookiesPath;
-    } catch (error) {
-        throw new Error(`Error al crear archivo de cookies: ${error.message}`);
+    // Ruta donde guardaste las cookies exportadas desde el navegador
+    const realCookiesPath = path.join(__dirname, 'cookies', 'cookies.txt');
+    if (!fs.existsSync(realCookiesPath)) {
+        throw new Error('Archivo de cookies reales no encontrado. Exporta cookies válidas y colócalas en /cookies/youtube_cookies.txt');
     }
+    return realCookiesPath;
 }
 
 function downloadYtDlp() {
