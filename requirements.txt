@@ -1,4 +1,0 @@
-echo "yt-dlp>=2023.1.6" > requirements.txt
-git add requirements.txt
-git commit -m "Add Python requirements"
-git push origin main
